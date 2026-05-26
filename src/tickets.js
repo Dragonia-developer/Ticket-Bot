@@ -34,10 +34,23 @@ function saveTickets(config, tickets) {
 function buildPanel(panelId, config) {
   const panel = config.panels?.[panelId];
   if (!panel || !panel.enabled) throw new Error(`Panel not found or disabled: ${panelId}`);
+  const serverName = config.server?.name || panel.serverName;
   const embed = new EmbedBuilder()
     .setColor(config.colors?.primary || '#5865F2')
     .setTitle(panel.title || 'Support')
-    .setDescription(panel.description || 'Open a ticket below.');
+    .setDescription(panel.description || 'Open a ticket below.')
+    .setTimestamp();
+  if (serverName) embed.setAuthor({ name: serverName });
+  if (panel.subtitle) {
+    embed.addFields({ name: panel.subtitle, value: panel.subtitleText || 'Choose a category below.', inline: false });
+  }
+  if (Array.isArray(panel.fields)) {
+    for (const field of panel.fields.slice(0, 6)) {
+      if (field.name && field.value) {
+        embed.addFields({ name: field.name, value: field.value, inline: Boolean(field.inline) });
+      }
+    }
+  }
   if (panel.footer) embed.setFooter({ text: panel.footer });
   if (panel.image) embed.setImage(panel.image);
   if (panel.thumbnail) embed.setThumbnail(panel.thumbnail);
@@ -65,20 +78,20 @@ async function sendPanel(interaction, panelId, channel, config) {
 function controls(config, ticket) {
   const claimEnabled = config.claim?.enabled;
   const row = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId('ticket:close').setLabel('Close').setEmoji('🔒').setStyle(ButtonStyle.Danger),
-    new ButtonBuilder().setCustomId('ticket:transcript').setLabel('Transcript').setEmoji('📄').setStyle(ButtonStyle.Secondary)
+    new ButtonBuilder().setCustomId('ticket:close').setLabel('Close').setStyle(ButtonStyle.Danger),
+    new ButtonBuilder().setCustomId('ticket:transcript').setLabel('Transcript').setStyle(ButtonStyle.Secondary)
   );
   if (claimEnabled) {
     row.addComponents(
       new ButtonBuilder()
         .setCustomId(ticket.claimedBy ? 'ticket:unclaim' : 'ticket:claim')
         .setLabel(ticket.claimedBy ? 'Unclaim' : 'Claim')
-        .setEmoji('🙋')
+        
         .setStyle(ticket.claimedBy ? ButtonStyle.Secondary : ButtonStyle.Primary)
     );
   }
   if (config.ai?.enabled) {
-    row.addComponents(new ButtonBuilder().setCustomId('ticket:ai').setLabel('AI Reply').setEmoji('🤖').setStyle(ButtonStyle.Success));
+    row.addComponents(new ButtonBuilder().setCustomId('ticket:ai').setLabel('AI Reply').setStyle(ButtonStyle.Success));
   }
   return [row];
 }

@@ -1,4 +1,4 @@
-const { AttachmentBuilder, Client, EmbedBuilder, GatewayIntentBits, Partials } = require('discord.js');
+const { ActivityType, AttachmentBuilder, Client, EmbedBuilder, GatewayIntentBits, Partials } = require('discord.js');
 const { getConfig, reloadConfig, updateConfig } = require('./config');
 const { getByPath, isStaff, parseConfigValue } = require('./utils');
 const {
@@ -45,6 +45,16 @@ function setupEmbed(config) {
     );
 }
 
+function applyPresence(config) {
+  const presence = config.bot?.presence;
+  if (!presence?.enabled || !client.user) return;
+  const type = ActivityType[presence.type] ?? ActivityType.Watching;
+  client.user.setPresence({
+    status: presence.status || 'online',
+    activities: presence.name ? [{ name: presence.name, type }] : []
+  });
+}
+
 async function handleTicketCommand(interaction) {
   let config = getConfig();
   if (!isStaff(interaction.member, config, null)) {
@@ -62,6 +72,7 @@ async function handleTicketCommand(interaction) {
   }
   if (group === 'config' && subcommand === 'reload') {
     config = reloadConfig();
+    applyPresence(config);
     return interaction.reply({ content: config.messages?.configReloaded || 'Configuration reloaded.', ephemeral: true });
   }
   if (group === 'config' && subcommand === 'get') {
@@ -92,6 +103,7 @@ async function handleTicketCommand(interaction) {
 }
 
 client.once('ready', () => {
+  applyPresence(getConfig());
   console.log(`Logged in as ${client.user.tag}`);
 });
 

@@ -12,13 +12,26 @@ async function generateAiReply(channel, ticket, category, config) {
     .join('\n');
   const styleName = category.aiStyle || config.ai.defaultStyle || 'friendly';
   const style = config.ai.styles?.[styleName] || config.ai.styles?.friendly || 'Be helpful and concise.';
+  const server = config.server || {};
+  const aiContext = [
+    config.ai.systemPrompt || 'You are a Discord support ticket assistant.',
+    `Server name: ${server.name || channel.guild.name}`,
+    server.description ? `Server description: ${server.description}` : '',
+    server.language ? `Main server language: ${server.language}` : '',
+    server.rules ? `Server rules: ${server.rules}` : '',
+    server.supportInfo ? `Support information: ${server.supportInfo}` : '',
+    config.ai.serverInfo ? `Extra server information: ${config.ai.serverInfo}` : '',
+    Array.isArray(config.ai.knowledgeBase) && config.ai.knowledgeBase.length
+      ? `Knowledge base:\n- ${config.ai.knowledgeBase.join('\n- ')}`
+      : ''
+  ].filter(Boolean).join('\n');
   const response = await client.chat.completions.create({
     model: config.ai.model || 'gpt-4o-mini',
     messages: [
       {
         role: 'system',
         content: [
-          'You are a Discord support ticket assistant.',
+          aiContext,
           style,
           config.ai.safety || '',
           'Reply in English unless the user clearly writes another language.'
