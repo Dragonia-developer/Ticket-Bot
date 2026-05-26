@@ -158,7 +158,24 @@
       },
       "selectPlaceholder": "Choose a support category",
       "allowMultipleOpenTickets": false,
-      "categories": ["general", "billing", "technical"]
+      "categories": ["general", "billing", "technical"],
+      "defaultWelcomeTitle": "Welcome, {opener}",
+      "defaultWelcomeMessage": "Please describe your request clearly.",
+      "defaultTopic": "Ticket for {opener} | Category: {category}",
+      "categoryOverrides": {
+        "general": {
+          "enabled": true,
+          "label": "General Support",
+          "description": "Questions, reports and general help.",
+          "supportRoleIds": [],
+          "discordCategoryId": "",
+          "channelName": "ticket-{username}",
+          "welcomeTitle": "Welcome, {opener}",
+          "welcomeMessage": "Thanks for opening a ticket. Please describe your request clearly.",
+          "topic": "Ticket for {opener} | Category: {category}",
+          "aiStyle": "friendly"
+        }
+      }
     }
   },
   "categories": {

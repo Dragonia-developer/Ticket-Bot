@@ -2,7 +2,7 @@
 
 A clean Discord ticket bot made for server owners, not programmers.
 
-You get a polished ticket system, a visual config menu, panel management, transcripts, business hours, logs and optional AI replies. Most setup is done inside Discord with `/ticket config`.
+You get a polished ticket system, a visual config menu, support profiles, transcripts, business hours, logs and optional AI replies. Most setup is done inside Discord with `/ticket config`.
 
 ## Commands
 
@@ -45,6 +45,20 @@ Then open Discord and run:
 
 When you run `/ticket config`, the first screen is the **Ticket Panel Manager**.
 
+In this bot, a **panel** means a full support profile.
+
+A panel is not only a message. Each panel can have its own:
+
+- public ticket panel text
+- categories
+- staff roles
+- Discord parent category IDs
+- ticket channel names
+- welcome messages
+- ticket topic
+- log channel
+- logged events
+
 From there you can:
 
 - choose an existing panel
@@ -67,7 +81,7 @@ This is the normal flow:
 
 ## Panel Manager
 
-A panel is the public message users click to open tickets.
+A panel is a full support profile.
 
 Example panels:
 
@@ -100,6 +114,36 @@ Category example:
 ```text
 general, billing, technical
 ```
+
+### Panel Categories
+
+Click `Panel Categories` to edit the selected panel's own categories.
+
+Each line is one category profile:
+
+```text
+id | label | description | staffRoleIds | parentCategoryId | channelName
+```
+
+Example:
+
+```text
+general | General Support | General questions and help | 123456789012345678 | 111111111111111111 | ticket-{username}
+billing | Billing Help | Purchases and invoices | 222222222222222222 | 111111111111111111 | billing-{username}
+reports | Player Reports | Report a user or issue | 333333333333333333 | 444444444444444444 | report-{username}
+```
+
+This means each panel can have different categories.
+
+Example:
+
+```text
+support panel -> general, billing, technical
+reports panel -> reports, appeals, staff-help
+donation panel -> donation-help, payment-help
+```
+
+Each one can use different staff roles and different parent Discord categories.
 
 ## Panel Logs
 

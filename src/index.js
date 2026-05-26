@@ -194,7 +194,7 @@ function panelDashboard(config, selectedId = Object.keys(config.panels || {})[0]
       { name: 'Selected Panel', value: `\`${selectedId}\``, inline: true },
       { name: 'Status', value: selected.enabled === false ? 'Disabled' : 'Enabled', inline: true },
       { name: 'Title', value: selected.title || 'Not set', inline: false },
-      { name: 'Categories', value: (selected.categories || []).join(', ') || 'None', inline: false },
+      { name: 'Categories', value: (Array.isArray(selected.categories) ? selected.categories : Object.keys(selected.categories || {})).join(', ') || 'None', inline: false },
       { name: 'Panel Log', value: selected.logs?.enabled ? `Enabled ${selected.logs.channelId ? `(<#${selected.logs.channelId}>)` : '(no channel)'}` : 'Uses global log settings or disabled', inline: false }
     )
     .setFooter({ text: 'Tip: after creating a panel, use /ticket panel panel:<id> channel:#channel to send it.' });
@@ -210,6 +210,7 @@ function panelDashboard(config, selectedId = Object.keys(config.panels || {})[0]
   rows.push(new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId('panel-manager:create').setLabel('Create Panel').setEmoji('➕').setStyle(ButtonStyle.Success),
     new ButtonBuilder().setCustomId(`panel-manager:edit:${selectedId}`).setLabel('Panel Config').setEmoji('✏️').setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId(`panel-manager:categories:${selectedId}`).setLabel('Panel Categories').setEmoji('📂').setStyle(ButtonStyle.Primary),
     new ButtonBuilder().setCustomId(`panel-manager:logs:${selectedId}`).setLabel('Panel Logs').setEmoji('📌').setStyle(ButtonStyle.Secondary),
     new ButtonBuilder().setCustomId(`panel-manager:delete:${selectedId}`).setLabel('Delete').setEmoji('🗑️').setStyle(ButtonStyle.Danger)
   ));
@@ -362,6 +363,32 @@ function panelLogsModal(panelId, config) {
     );
 }
 
+function panelCategoriesModal(panelId, config) {
+  const panel = config.panels?.[panelId] || {};
+  const ids = Array.isArray(panel.categories) ? panel.categories : Object.keys(panel.categories || {});
+  const overrides = panel.categoryOverrides || {};
+  const lines = ids.map((id) => {
+    const category = { ...(config.categories?.[id] || {}), ...(overrides[id] || {}) };
+    return [
+      id,
+      category.label || id,
+      category.description || 'Support request',
+      (category.supportRoleIds || []).join(','),
+      category.discordCategoryId || '',
+      category.channelName || `${id}-{username}`
+    ].join(' | ');
+  }).join('\n');
+  return new ModalBuilder()
+    .setCustomId(`panel-manager:categories-modal:${panelId}`)
+    .setTitle(`Panel Categories: ${panelId}`.slice(0, 45))
+    .addComponents(
+      input('categories', 'Categories for this panel', 'id | label | description | roleIds | parentCategoryId | channelName', lines || 'general | General Support | General questions |  |  | ticket-{username}', TextInputStyle.Paragraph, true),
+      input('welcomeTitle', 'Default welcome title', 'Example: Welcome, {opener}', panel.defaultWelcomeTitle || 'Welcome, {opener}'),
+      input('welcomeMessage', 'Default welcome message', 'Used when category has no custom welcome message.', panel.defaultWelcomeMessage || 'Please describe your request clearly.', TextInputStyle.Paragraph),
+      input('topic', 'Default ticket topic', 'Example: Ticket for {opener} | {category}', panel.defaultTopic || 'Ticket for {opener} | Category: {category}')
+    );
+}
+
 function panelCreateModal() {
   return new ModalBuilder()
     .setCustomId('panel-manager:create-modal')
@@ -386,6 +413,7 @@ function normalizePanelId(value) {
 }
 
 function panelFromModal(interaction, existing = {}) {
+  const categories = splitList(readField(interaction, 'categories'));
   return {
     ...existing,
     enabled: yesNo(readField(interaction, 'enabled'), existing.enabled !== false),
@@ -400,8 +428,35 @@ function panelFromModal(interaction, existing = {}) {
     logs: existing.logs || { enabled: false, channelId: '', events: {} },
     selectPlaceholder: existing.selectPlaceholder || 'Choose a support category',
     allowMultipleOpenTickets: Boolean(existing.allowMultipleOpenTickets),
-    categories: splitList(readField(interaction, 'categories'))
+    categories,
+    categoryOverrides: existing.categoryOverrides || Object.fromEntries(categories.map((id) => [id, {}]))
   };
+}
+
+function parsePanelCategories(value, panel = {}) {
+  const categories = [];
+  const categoryOverrides = {};
+  for (const rawLine of String(value || '').split('\n')) {
+    const line = rawLine.trim();
+    if (!line) continue;
+    const [rawId, label, description, roleIds, parentId, channelName] = line.split('|').map((part) => part?.trim() || '');
+    const id = normalizePanelId(rawId);
+    if (!id) continue;
+    categories.push(id);
+    categoryOverrides[id] = {
+      enabled: true,
+      label: label || id,
+      description: description || 'Support request',
+      supportRoleIds: splitList(roleIds || ''),
+      discordCategoryId: parentId || '',
+      channelName: channelName || `${id}-{username}`,
+      welcomeTitle: panel.defaultWelcomeTitle || 'Welcome, {opener}',
+      welcomeMessage: panel.defaultWelcomeMessage || 'Please describe your request clearly.',
+      topic: panel.defaultTopic || 'Ticket for {opener} | Category: {category}',
+      aiStyle: 'friendly'
+    };
+  }
+  return { categories, categoryOverrides };
 }
 
 function configEditModal() {
@@ -705,6 +760,9 @@ client.on('interactionCreate', async (interaction) => {
         if (interaction.customId.startsWith('panel-manager:logs:')) {
           return interaction.showModal(panelLogsModal(interaction.customId.split(':')[2], config));
         }
+        if (interaction.customId.startsWith('panel-manager:categories:')) {
+          return interaction.showModal(panelCategoriesModal(interaction.customId.split(':')[2], config));
+        }
         if (interaction.customId.startsWith('panel-manager:delete:')) {
           const panelId = interaction.customId.split(':')[2];
           const nextPanels = { ...(config.panels || {}) };
@@ -796,6 +854,44 @@ client.on('interactionCreate', async (interaction) => {
       const nextConfig = updateConfig('panels', nextPanels);
       return interaction.reply({
         content: `Saved log settings for panel \`${panelId}\`.`,
+        embeds: panelDashboard(nextConfig, panelId).embeds,
+        components: panelDashboard(nextConfig, panelId).components,
+        ephemeral: true
+      });
+    }
+    if (interaction.isModalSubmit() && interaction.customId.startsWith('panel-manager:categories-modal:')) {
+      if (!isStaff(interaction.member, config, null)) {
+        return interaction.reply({ content: config.messages?.noPermission || 'No permission.', ephemeral: true });
+      }
+      const panelId = interaction.customId.split(':')[2];
+      const current = getConfig();
+      const panel = current.panels?.[panelId] || {};
+      const parsed = parsePanelCategories(readField(interaction, 'categories'), panel);
+      if (!parsed.categories.length) {
+        return interaction.reply({ content: 'Add at least one category line.', ephemeral: true });
+      }
+      const defaultWelcomeTitle = readField(interaction, 'welcomeTitle') || 'Welcome, {opener}';
+      const defaultWelcomeMessage = readField(interaction, 'welcomeMessage') || 'Please describe your request clearly.';
+      const defaultTopic = readField(interaction, 'topic') || 'Ticket for {opener} | Category: {category}';
+      for (const id of parsed.categories) {
+        parsed.categoryOverrides[id].welcomeTitle = panel.categoryOverrides?.[id]?.welcomeTitle || defaultWelcomeTitle;
+        parsed.categoryOverrides[id].welcomeMessage = panel.categoryOverrides?.[id]?.welcomeMessage || defaultWelcomeMessage;
+        parsed.categoryOverrides[id].topic = panel.categoryOverrides?.[id]?.topic || defaultTopic;
+      }
+      const nextPanels = {
+        ...(current.panels || {}),
+        [panelId]: {
+          ...panel,
+          categories: parsed.categories,
+          categoryOverrides: parsed.categoryOverrides,
+          defaultWelcomeTitle,
+          defaultWelcomeMessage,
+          defaultTopic
+        }
+      };
+      const nextConfig = updateConfig('panels', nextPanels);
+      return interaction.reply({
+        content: `Saved categories for panel \`${panelId}\`.`,
         embeds: panelDashboard(nextConfig, panelId).embeds,
         components: panelDashboard(nextConfig, panelId).components,
         ephemeral: true

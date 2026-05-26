@@ -31,6 +31,24 @@ function saveTickets(config, tickets) {
   writeJson(ticketsFile(config), tickets);
 }
 
+function panelCategoryIds(panel) {
+  if (Array.isArray(panel.categories)) return panel.categories;
+  if (panel.categories && typeof panel.categories === 'object') return Object.keys(panel.categories);
+  return [];
+}
+
+function resolvePanelCategory(config, panel, categoryId) {
+  const globalCategory = config.categories?.[categoryId] || {};
+  const inlineCategory = panel.categories && !Array.isArray(panel.categories) ? panel.categories[categoryId] : {};
+  const override = panel.categoryOverrides?.[categoryId] || {};
+  return {
+    ...globalCategory,
+    ...inlineCategory,
+    ...override,
+    enabled: override.enabled ?? inlineCategory?.enabled ?? globalCategory.enabled ?? true
+  };
+}
+
 async function sendLog(guild, config, eventName, title, description, fields = [], panelId = null) {
   const panelLogs = panelId ? config.panels?.[panelId]?.logs : null;
   const logs = panelLogs?.enabled ? panelLogs : config.logs;
@@ -95,8 +113,8 @@ function buildPanel(panelId, config) {
   if (panel.image) embed.setImage(panel.image);
   if (panel.thumbnail) embed.setThumbnail(panel.thumbnail);
 
-  const categories = (panel.categories || [])
-    .map((id) => ({ id, category: config.categories?.[id] }))
+  const categories = panelCategoryIds(panel)
+    .map((id) => ({ id, category: resolvePanelCategory(config, panel, id) }))
     .filter((entry) => entry.category?.enabled);
   const menu = new StringSelectMenuBuilder()
     .setCustomId(`ticket:open:${panelId}`)
@@ -139,7 +157,7 @@ function controls(config, ticket) {
 
 async function openTicket(interaction, panelId, categoryId, config) {
   const panel = config.panels?.[panelId];
-  const category = config.categories?.[categoryId];
+  const category = panel ? resolvePanelCategory(config, panel, categoryId) : null;
   if (!panel?.enabled || !category?.enabled) {
     return interaction.reply({ content: 'This ticket category is not available.', ephemeral: true });
   }
@@ -164,7 +182,7 @@ async function openTicket(interaction, panelId, categoryId, config) {
           guild: interaction.guild,
           channel,
           ticket: existing,
-          category: config.categories?.[existing.categoryId],
+          category: resolvePanelCategory(config, panel, existing.categoryId),
           owner: interaction.user
         })),
         ephemeral: true
