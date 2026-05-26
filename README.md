@@ -120,37 +120,24 @@ Send a ticket panel:
 /ticket panel panel:support channel:#tickets
 ```
 
+Open the private config panel:
+
+```text
+/ticket config
+```
+
 Check setup:
 
 ```text
 /ticket setup
 ```
 
-Read a config value:
+The `/ticket config` panel is only visible to you. It lets you:
 
-```text
-/ticket config get path:server.name
-```
-
-Change a config value:
-
-```text
-/ticket config set path:server.name value:My Server
-/ticket config set path:claim.enabled value:true
-/ticket config set path:categories.general.supportRoleIds value:["123456789012345678"]
-```
-
-Reload config after editing the file:
-
-```text
-/ticket config reload
-```
-
-Export config with token and API keys hidden:
-
-```text
-/ticket config export
-```
+- View important config sections
+- Reload `config.json`
+- Export public config with secrets hidden
+- Open a form to edit values with dot paths like `server.name`, `claim.enabled` or `panels.support.title`
 
 ## Important Config Sections
 

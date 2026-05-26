@@ -1,4 +1,18 @@
-const { ActivityType, AttachmentBuilder, Client, EmbedBuilder, GatewayIntentBits, Partials } = require('discord.js');
+const {
+  ActionRowBuilder,
+  ActivityType,
+  AttachmentBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  Client,
+  EmbedBuilder,
+  GatewayIntentBits,
+  ModalBuilder,
+  Partials,
+  StringSelectMenuBuilder,
+  TextInputBuilder,
+  TextInputStyle
+} = require('discord.js');
 const { getConfig, reloadConfig, updateConfig } = require('./config');
 const { getByPath, isStaff, parseConfigValue } = require('./utils');
 const {
@@ -45,6 +59,83 @@ function setupEmbed(config) {
     );
 }
 
+const configSections = [
+  { id: 'server', label: 'Server', description: 'Name, language, rules and support info' },
+  { id: 'bot', label: 'Bot Status', description: 'Presence and activity text' },
+  { id: 'panels', label: 'Panels', description: 'Ticket panel text and layout' },
+  { id: 'categories', label: 'Categories', description: 'Ticket types, staff roles and welcome text' },
+  { id: 'businessHours', label: 'Business Hours', description: 'Working hours and outside-hours behavior' },
+  { id: 'transcript', label: 'Transcripts', description: 'HTML transcript and DM settings' },
+  { id: 'ai', label: 'AI Replies', description: 'Prompt, server info, model and styles' },
+  { id: 'messages', label: 'Messages', description: 'All public bot messages' }
+];
+
+function configPreview(value) {
+  return JSON.stringify(value, null, 2).slice(0, 950);
+}
+
+function configDashboard(config, sectionId = 'server') {
+  const section = configSections.find((entry) => entry.id === sectionId) || configSections[0];
+  const value = getByPath(publicConfig(config), section.id);
+  const panels = Object.keys(config.panels || {}).join(', ') || 'none';
+  const categories = Object.keys(config.categories || {}).join(', ') || 'none';
+  const embed = new EmbedBuilder()
+    .setColor(config.colors?.primary || '#3B82F6')
+    .setTitle('Ticket Bot Config Panel')
+    .setDescription('This private panel is only visible to you. Choose a section, export config, reload config, or open the edit form.')
+    .addFields(
+      { name: 'Server', value: config.server?.name || 'Not set', inline: true },
+      { name: 'Panels', value: panels.slice(0, 100), inline: true },
+      { name: 'Categories', value: categories.slice(0, 100), inline: true },
+      { name: `Selected: ${section.label}`, value: `\`\`\`json\n${configPreview(value)}\n\`\`\`` }
+    )
+    .setFooter({ text: 'Use dot paths like server.name or panels.support.title when editing.' })
+    .setTimestamp();
+  const select = new StringSelectMenuBuilder()
+    .setCustomId('config:view')
+    .setPlaceholder('Choose a config section')
+    .addOptions(configSections.map((entry) => ({
+      label: entry.label,
+      description: entry.description,
+      value: entry.id,
+      default: entry.id === section.id
+    })));
+  const buttons = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId('config:set').setLabel('Edit Value').setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId('config:reload').setLabel('Reload').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId('config:export').setLabel('Export').setStyle(ButtonStyle.Secondary)
+  );
+  return {
+    embeds: [embed],
+    components: [new ActionRowBuilder().addComponents(select), buttons],
+    ephemeral: true
+  };
+}
+
+function configEditModal() {
+  return new ModalBuilder()
+    .setCustomId('config:set-modal')
+    .setTitle('Edit Config Value')
+    .addComponents(
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId('path')
+          .setLabel('Config path')
+          .setPlaceholder('Example: server.name')
+          .setStyle(TextInputStyle.Short)
+          .setRequired(true)
+      ),
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId('value')
+          .setLabel('New value')
+          .setPlaceholder('Plain text, true, false, number, array or JSON object')
+          .setStyle(TextInputStyle.Paragraph)
+          .setRequired(true)
+      )
+    );
+}
+
 function applyPresence(config) {
   const presence = config.bot?.presence;
   if (!presence?.enabled || !client.user) return;
@@ -66,6 +157,9 @@ async function handleTicketCommand(interaction) {
 
   if (subcommand === 'panel') {
     return sendPanel(interaction, interaction.options.getString('panel', true), interaction.options.getChannel('channel', true), config);
+  }
+  if (subcommand === 'config') {
+    return interaction.reply(configDashboard(config));
   }
   if (subcommand === 'setup') {
     return interaction.reply({ embeds: [setupEmbed(config)], ephemeral: true });
@@ -127,12 +221,52 @@ client.on('interactionCreate', async (interaction) => {
       const panelId = interaction.customId.split(':')[2];
       return openTicket(interaction, panelId, interaction.values[0], config);
     }
+    if (interaction.isStringSelectMenu() && interaction.customId === 'config:view') {
+      if (!isStaff(interaction.member, config, null)) {
+        return interaction.reply({ content: config.messages?.noPermission || 'No permission.', ephemeral: true });
+      }
+      return interaction.update(configDashboard(config, interaction.values[0]));
+    }
     if (interaction.isButton()) {
+      if (interaction.customId.startsWith('config:')) {
+        if (!isStaff(interaction.member, config, null)) {
+          return interaction.reply({ content: config.messages?.noPermission || 'No permission.', ephemeral: true });
+        }
+        if (interaction.customId === 'config:set') return interaction.showModal(configEditModal());
+        if (interaction.customId === 'config:reload') {
+          const nextConfig = reloadConfig();
+          applyPresence(nextConfig);
+          return interaction.update(configDashboard(nextConfig));
+        }
+        if (interaction.customId === 'config:export') {
+          const buffer = Buffer.from(JSON.stringify(publicConfig(config), null, 2), 'utf8');
+          return interaction.reply({
+            content: 'Current config with secrets hidden.',
+            files: [new AttachmentBuilder(buffer, { name: 'config.public.json' })],
+            ephemeral: true
+          });
+        }
+      }
       if (interaction.customId === 'ticket:claim') return claimTicket(interaction, config, true);
       if (interaction.customId === 'ticket:unclaim') return claimTicket(interaction, config, false);
       if (interaction.customId === 'ticket:transcript') return sendTranscript(interaction, config, false);
       if (interaction.customId === 'ticket:close') return closeTicket(interaction, config);
       if (interaction.customId === 'ticket:ai') return aiReply(interaction, config);
+    }
+    if (interaction.isModalSubmit() && interaction.customId === 'config:set-modal') {
+      if (!isStaff(interaction.member, config, null)) {
+        return interaction.reply({ content: config.messages?.noPermission || 'No permission.', ephemeral: true });
+      }
+      const dottedPath = interaction.fields.getTextInputValue('path').trim();
+      const value = parseConfigValue(interaction.fields.getTextInputValue('value').trim());
+      const nextConfig = updateConfig(dottedPath, value);
+      applyPresence(nextConfig);
+      return interaction.reply({
+        content: `Updated \`${dottedPath}\`.\n\`\`\`json\n${JSON.stringify(value, null, 2).slice(0, 1600)}\n\`\`\``,
+        embeds: configDashboard(nextConfig, dottedPath.split('.')[0]).embeds,
+        components: configDashboard(nextConfig, dottedPath.split('.')[0]).components,
+        ephemeral: true
+      });
     }
   } catch (error) {
     console.error(error);

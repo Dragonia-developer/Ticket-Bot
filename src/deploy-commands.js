@@ -13,24 +13,9 @@ const commands = [
       .setDescription('Send a ticket panel to a channel')
       .addStringOption((option) => option.setName('panel').setDescription('Panel id from config.json').setRequired(true).setAutocomplete(true))
       .addChannelOption((option) => option.setName('channel').setDescription('Where to send the panel').setRequired(true).addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement)))
-    .addSubcommandGroup((group) => group
+    .addSubcommand((subcommand) => subcommand
       .setName('config')
-      .setDescription('Read or update config.json')
-      .addSubcommand((subcommand) => subcommand
-        .setName('get')
-        .setDescription('Read a config path')
-        .addStringOption((option) => option.setName('path').setDescription('Example: panels.support.title').setRequired(true)))
-      .addSubcommand((subcommand) => subcommand
-        .setName('set')
-        .setDescription('Update a config path')
-        .addStringOption((option) => option.setName('path').setDescription('Example: claim.enabled').setRequired(true))
-        .addStringOption((option) => option.setName('value').setDescription('JSON value or plain text').setRequired(true)))
-      .addSubcommand((subcommand) => subcommand
-        .setName('reload')
-        .setDescription('Reload config.json from disk'))
-      .addSubcommand((subcommand) => subcommand
-        .setName('export')
-        .setDescription('Send the current public config as a file')))
+      .setDescription('Open the private config control panel'))
     .addSubcommand((subcommand) => subcommand
       .setName('setup')
       .setDescription('Show setup status and missing required values'))
