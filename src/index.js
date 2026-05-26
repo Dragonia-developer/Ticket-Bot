@@ -60,14 +60,14 @@ function setupEmbed(config) {
 }
 
 const configSections = [
-  { id: 'server', label: 'Server', description: 'Name, language, rules and support info' },
-  { id: 'bot', label: 'Bot Status', description: 'Presence and activity text' },
-  { id: 'panels', label: 'Panels', description: 'Ticket panel text and layout' },
-  { id: 'categories', label: 'Categories', description: 'Ticket types, staff roles and welcome text' },
-  { id: 'businessHours', label: 'Business Hours', description: 'Working hours and outside-hours behavior' },
-  { id: 'transcript', label: 'Transcripts', description: 'HTML transcript and DM settings' },
-  { id: 'ai', label: 'AI Replies', description: 'Prompt, server info, model and styles' },
-  { id: 'messages', label: 'Messages', description: 'All public bot messages' }
+  { id: 'server', label: 'Server Info', emoji: '🏠', description: 'Name, language, rules and support info' },
+  { id: 'bot', label: 'Bot Status', emoji: '🟢', description: 'Discord status and activity text' },
+  { id: 'panels', label: 'Ticket Panels', emoji: '🎟️', description: 'The message users click to open tickets' },
+  { id: 'categories', label: 'Categories', emoji: '📂', description: 'Ticket types, staff roles and welcome text' },
+  { id: 'businessHours', label: 'Business Hours', emoji: '🕒', description: 'Working hours and offline behavior' },
+  { id: 'transcript', label: 'Transcripts', emoji: '📄', description: 'HTML files, logs and DM settings' },
+  { id: 'ai', label: 'AI Assistant', emoji: '🤖', description: 'Prompt, server info, model and styles' },
+  { id: 'messages', label: 'Bot Messages', emoji: '💬', description: 'Texts the bot sends to users' }
 ];
 
 function configPreview(value) {
@@ -79,17 +79,26 @@ function configDashboard(config, sectionId = 'server') {
   const value = getByPath(publicConfig(config), section.id);
   const panels = Object.keys(config.panels || {}).join(', ') || 'none';
   const categories = Object.keys(config.categories || {}).join(', ') || 'none';
+  const aiState = config.ai?.enabled ? `On (${config.ai.model || 'default model'})` : 'Off';
+  const hoursState = config.businessHours?.enabled ? 'On' : 'Off';
   const embed = new EmbedBuilder()
     .setColor(config.colors?.primary || '#3B82F6')
-    .setTitle('Ticket Bot Config Panel')
-    .setDescription('This private panel is only visible to you. Choose a section, export config, reload config, or open the edit form.')
+    .setTitle('🎛️ Ticket Bot Control Panel')
+    .setDescription([
+      '**Only you can see this menu.**',
+      'Pick a section below, then use the buttons to edit, reload or export your config.',
+      'No coding needed: the edit form asks for a simple path and a value.'
+    ].join('\n'))
     .addFields(
-      { name: 'Server', value: config.server?.name || 'Not set', inline: true },
-      { name: 'Panels', value: panels.slice(0, 100), inline: true },
-      { name: 'Categories', value: categories.slice(0, 100), inline: true },
-      { name: `Selected: ${section.label}`, value: `\`\`\`json\n${configPreview(value)}\n\`\`\`` }
+      { name: '🏠 Server', value: config.server?.name || 'Not set', inline: true },
+      { name: '🎟️ Panels', value: panels.slice(0, 100), inline: true },
+      { name: '📂 Categories', value: categories.slice(0, 100), inline: true },
+      { name: '🕒 Business Hours', value: hoursState, inline: true },
+      { name: '🤖 AI', value: aiState, inline: true },
+      { name: '🧭 Quick Examples', value: '`server.name` -> server name\n`panels.support.title` -> panel title\n`claim.enabled` -> true or false', inline: false },
+      { name: `${section.emoji} Selected: ${section.label}`, value: `\`\`\`json\n${configPreview(value)}\n\`\`\`` }
     )
-    .setFooter({ text: 'Use dot paths like server.name or panels.support.title when editing.' })
+    .setFooter({ text: 'Tip: use Edit Value for small changes. Use config.json for big changes.' })
     .setTimestamp();
   const select = new StringSelectMenuBuilder()
     .setCustomId('config:view')
@@ -97,13 +106,14 @@ function configDashboard(config, sectionId = 'server') {
     .addOptions(configSections.map((entry) => ({
       label: entry.label,
       description: entry.description,
+      emoji: entry.emoji,
       value: entry.id,
       default: entry.id === section.id
     })));
   const buttons = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId('config:set').setLabel('Edit Value').setStyle(ButtonStyle.Primary),
-    new ButtonBuilder().setCustomId('config:reload').setLabel('Reload').setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId('config:export').setLabel('Export').setStyle(ButtonStyle.Secondary)
+    new ButtonBuilder().setCustomId('config:set').setLabel('Edit Value').setEmoji('✏️').setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId('config:reload').setLabel('Reload File').setEmoji('🔄').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId('config:export').setLabel('Download Config').setEmoji('📦').setStyle(ButtonStyle.Secondary)
   );
   return {
     embeds: [embed],
@@ -115,12 +125,12 @@ function configDashboard(config, sectionId = 'server') {
 function configEditModal() {
   return new ModalBuilder()
     .setCustomId('config:set-modal')
-    .setTitle('Edit Config Value')
+    .setTitle('Edit One Config Setting')
     .addComponents(
       new ActionRowBuilder().addComponents(
         new TextInputBuilder()
           .setCustomId('path')
-          .setLabel('Config path')
+          .setLabel('What do you want to change?')
           .setPlaceholder('Example: server.name')
           .setStyle(TextInputStyle.Short)
           .setRequired(true)
@@ -129,7 +139,7 @@ function configEditModal() {
         new TextInputBuilder()
           .setCustomId('value')
           .setLabel('New value')
-          .setPlaceholder('Plain text, true, false, number, array or JSON object')
+          .setPlaceholder('Example: My Cool Server, true, false, or [\"role_id\"]')
           .setStyle(TextInputStyle.Paragraph)
           .setRequired(true)
       )

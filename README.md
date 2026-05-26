@@ -1,163 +1,206 @@
 # Dragonia Ticket Bot
 
-A simple, clean and highly configurable Discord ticket bot.
+Beautiful, simple and powerful Discord ticket bot.
 
-It is made for any kind of Discord server: communities, game servers, shops, hosting teams, support servers and private groups. You can edit almost every message from `config.json` without touching the code.
+This bot is made for people who do not know coding. You edit one file, click one bat file, and use two Discord commands.
 
-## What It Can Do
+## What You Get
 
-- Send beautiful ticket panels with `/ticket panel`
-- Create different panels for different channels
-- Create different ticket categories such as general, billing and technical support
-- Give each category its own staff roles, channel name, welcome message and transcript log channel
-- Let staff claim and unclaim tickets
-- Close tickets and generate styled HTML transcripts
-- Send transcripts to the user by DM
-- Save transcripts locally
-- Use business hours
-- Allow or block tickets outside business hours
-- Send an automatic outside-hours notice inside tickets
-- Set the bot status from config
-- Add your server name and server information to the config
-- Optional OpenAI support replies with custom prompts, styles and server knowledge
+- Clean ticket panel
+- Easy `/ticket config` menu
+- Multiple ticket categories
+- Staff role support
+- Claim button
+- Close button
+- HTML transcripts
+- Transcript DM to users
+- Business hours
+- Outside-hours messages
+- Bot status from config
+- Optional AI support assistant
+- Simple Windows `.bat` files
 
-## Requirements
+## The Only Discord Commands
 
-Install these first:
+There are only two main commands:
 
-- Node.js 20 or newer
-- A Discord bot application from the Discord Developer Portal
-
-The bot needs these permissions in your server:
-
-- Manage Channels
-- View Channels
-- Send Messages
-- Read Message History
-- Attach Files
-- Manage Messages
-
-If you want AI auto replies or full message reading, enable this in the Discord Developer Portal:
-
-- Message Content Intent
-
-## Quick Start
-
-Download or clone the bot:
-
-```bash
-git clone https://github.com/Dragonia-developer/Ticket-Bot.git
-cd Ticket-Bot
+```text
+/ticket panel panel:support channel:#tickets
+/ticket config
 ```
 
-Install packages:
+That is it.
 
-```bash
-npm install
+`/ticket panel` sends the ticket panel to a channel.
+
+`/ticket config` opens a private control panel only you can see.
+
+## Super Simple Setup
+
+### 1. Install Node.js
+
+Download Node.js from:
+
+```text
+https://nodejs.org/
 ```
 
-Create your private config:
+Install the LTS version.
 
-```bash
-copy config.example.json config.json
+### 2. Download This Bot
+
+Download the project from GitHub:
+
+```text
+https://github.com/Dragonia-developer/Ticket-Bot
 ```
 
-Edit `config.json` and fill these:
+Extract it anywhere you want.
+
+### 3. Open `config.json`
+
+Find this file:
+
+```text
+config.json
+```
+
+Fill these values:
 
 ```json
 {
   "token": "YOUR_DISCORD_BOT_TOKEN",
   "clientId": "YOUR_APPLICATION_CLIENT_ID",
-  "guildId": "YOUR_SERVER_ID_FOR_TESTING"
+  "guildId": "YOUR_SERVER_ID"
 }
 ```
 
-Deploy slash commands:
+Do not share your token with anyone.
 
-```bash
-npm run deploy
-```
+### 4. Install Packages
 
-Start the bot:
-
-```bash
-npm start
-```
-
-On Windows PowerShell, if `npm` is blocked, use `npm.cmd`:
-
-```powershell
-npm.cmd install
-npm.cmd run deploy
-npm.cmd start
-```
-
-You can also use the included Windows files:
+Double click:
 
 ```text
 install.bat
+```
+
+Wait until it finishes.
+
+### 5. Add Commands to Discord
+
+Double click:
+
+```text
 deploy-commands.bat
+```
+
+This removes old command versions and adds the correct commands again.
+
+### 6. Start the Bot
+
+Double click:
+
+```text
 start.bat
 ```
 
-## First Setup Checklist
+If the window says the bot logged in, it is working.
 
-1. Put your Discord bot token in `config.json`.
-2. Put your application/client ID in `clientId`.
-3. Put your server ID in `guildId` while testing.
-4. Add your support role IDs to `permissions.managerRoles` or to each category's `supportRoleIds`.
-5. Optional: add Discord parent category IDs to `discordCategoryId`.
-6. Optional: add a transcript log channel ID to `transcript.logChannelId`.
-7. Run `npm run deploy`.
-8. Run `npm start`.
-9. In Discord, send a panel with `/ticket panel panel:support channel:#your-channel`.
+## First Test
 
-## Main Commands
-
-Send a ticket panel:
-
-```text
-/ticket panel panel:support channel:#tickets
-```
-
-Open the private config panel:
+In Discord, type:
 
 ```text
 /ticket config
 ```
 
-Check setup:
+You should see the private config control panel.
+
+Then send a ticket panel:
 
 ```text
-/ticket setup
+/ticket panel panel:support channel:#tickets
 ```
 
-The `/ticket config` panel is only visible to you. It lets you:
+Replace `#tickets` with the channel where you want the panel.
 
-- View important config sections
-- Reload `config.json`
-- Export public config with secrets hidden
-- Open a form to edit values with dot paths like `server.name`, `claim.enabled` or `panels.support.title`
+## Config Panel
 
-## Important Config Sections
+Use:
 
-### Server Info
+```text
+/ticket config
+```
 
-This is used in panels, transcripts and AI context.
+The bot opens a private menu with sections:
+
+- Server Info
+- Bot Status
+- Ticket Panels
+- Categories
+- Business Hours
+- Transcripts
+- AI Assistant
+- Bot Messages
+
+Buttons:
+
+- `Edit Value` changes one setting
+- `Reload File` reloads `config.json`
+- `Download Config` sends you a safe config export with secrets hidden
+
+Examples for `Edit Value`:
+
+```text
+server.name
+```
+
+```text
+My Cool Server
+```
+
+```text
+panels.support.title
+```
+
+```text
+Support Center
+```
+
+```text
+claim.enabled
+```
+
+```text
+true
+```
+
+For role lists, use this style:
+
+```text
+categories.general.supportRoleIds
+```
+
+```json
+["123456789012345678"]
+```
+
+## Important Config Parts
+
+### Server Name
 
 ```json
 "server": {
   "name": "Your Community",
   "description": "A friendly Discord community with organized support tickets.",
-  "language": "English",
-  "rules": "Be respectful, do not spam, and never share private credentials in tickets.",
-  "supportInfo": "Support usually replies during business hours."
+  "language": "English"
 }
 ```
 
-### Bot Status
+This appears in the bot panel and helps the AI understand your server.
 
-Set the bot's Discord status from config.
+### Bot Status
 
 ```json
 "bot": {
@@ -170,23 +213,13 @@ Set the bot's Discord status from config.
 }
 ```
 
-Valid `status` examples:
+This makes the bot show something like:
 
-- `online`
-- `idle`
-- `dnd`
-- `invisible`
+```text
+Watching support tickets
+```
 
-Valid `type` examples:
-
-- `Playing`
-- `Watching`
-- `Listening`
-- `Competing`
-
-### Panels
-
-Panels are the messages users click to open tickets.
+### Ticket Panel
 
 ```json
 "panels": {
@@ -194,60 +227,31 @@ Panels are the messages users click to open tickets.
     "enabled": true,
     "title": "Support Center",
     "description": "Need help? Select the category that best matches your request.",
-    "subtitle": "Before opening a ticket",
-    "subtitleText": "Please choose the correct category and describe your issue clearly.",
-    "fields": [
-      {
-        "name": "What to include",
-        "value": "Explain what happened and include screenshots or IDs when useful.",
-        "inline": false
-      }
-    ],
-    "footer": "One clear ticket is better than multiple duplicate tickets.",
     "selectPlaceholder": "Choose a support category",
-    "allowMultipleOpenTickets": false,
     "categories": ["general", "billing", "technical"]
   }
 }
 ```
 
-You can create more panels by adding another panel key:
+### Ticket Categories
 
 ```json
-"reports": {
-  "enabled": true,
-  "title": "Report Center",
-  "description": "Open a report for staff review.",
-  "selectPlaceholder": "Choose a report type",
-  "allowMultipleOpenTickets": true,
-  "categories": ["general"]
+"categories": {
+  "general": {
+    "enabled": true,
+    "label": "General Support",
+    "description": "Questions, reports and general help.",
+    "supportRoleIds": [],
+    "channelName": "ticket-{username}",
+    "welcomeMessage": "Thanks for opening a ticket. Please describe your request clearly."
+  }
 }
 ```
 
-Then send it:
-
-```text
-/ticket panel panel:reports channel:#reports
-```
-
-### Categories
-
-Categories control ticket channels and staff access.
+Put your staff role IDs in:
 
 ```json
-"general": {
-  "enabled": true,
-  "label": "General Support",
-  "description": "Questions, reports and general help.",
-  "discordCategoryId": "DISCORD_PARENT_CATEGORY_ID",
-  "supportRoleIds": ["SUPPORT_ROLE_ID"],
-  "logChannelId": "TRANSCRIPT_LOG_CHANNEL_ID",
-  "channelName": "ticket-{username}",
-  "welcomeTitle": "Welcome, {user}",
-  "welcomeMessage": "Thanks for opening a ticket. Please describe your request clearly.",
-  "topic": "Ticket for {user} | Category: {category}",
-  "aiStyle": "friendly"
-}
+"supportRoleIds": ["ROLE_ID_HERE"]
 ```
 
 ### Business Hours
@@ -255,104 +259,99 @@ Categories control ticket channels and staff access.
 ```json
 "businessHours": {
   "enabled": true,
-  "timezone": "Europe/Istanbul",
   "allowTicketsOutsideHours": true,
-  "sendNoticeInsideTicket": true,
-  "days": {
-    "monday": [{ "start": "09:00", "end": "18:00" }],
-    "tuesday": [{ "start": "09:00", "end": "18:00" }],
-    "saturday": [],
-    "sunday": []
-  }
+  "sendNoticeInsideTicket": true
 }
 ```
 
-If `allowTicketsOutsideHours` is `false`, users cannot open tickets outside business hours.
-
-If it is `true`, tickets still open. If `sendNoticeInsideTicket` is also `true`, the bot posts the outside-hours message inside the ticket.
-
-### Transcripts
+If you want to block tickets outside working hours:
 
 ```json
-"transcript": {
-  "enabled": true,
-  "dmUser": true,
-  "saveToFile": true,
-  "logChannelId": "LOG_CHANNEL_ID",
-  "html": {
-    "title": "{guild} Ticket Transcript",
-    "brandName": "Your Community Support",
-    "accentColor": "#3B82F6",
-    "includeBotMessages": true,
-    "includeAttachments": true,
-    "footerText": "Generated by Dragonia Ticket Bot"
-  }
-}
+"allowTicketsOutsideHours": false
 ```
 
-### AI Replies
+### AI Assistant
 
-AI is disabled by default.
+AI is off by default.
 
-To enable it, add your OpenAI API key and set `enabled` to `true`.
+To use it, fill:
 
 ```json
 "ai": {
   "enabled": true,
-  "provider": "openai",
   "apiKey": "YOUR_OPENAI_API_KEY",
-  "model": "gpt-4o-mini",
-  "systemPrompt": "You are the support assistant for this Discord server. Be clear, polite, practical and safe.",
-  "serverInfo": "Add products, services, links, plans, rules or common fixes here.",
-  "knowledgeBase": [
-    "Ask for screenshots or error messages when the issue is unclear.",
-    "Never ask users for passwords, tokens or private keys."
-  ],
-  "autoReply": false,
-  "replyInTicket": true,
-  "defaultStyle": "friendly"
+  "systemPrompt": "You are the support assistant for this Discord server.",
+  "serverInfo": "Write server details, links, prices, rules or common fixes here."
 }
 ```
 
-AI modes:
+AI can help staff write replies. It can also auto reply if you turn on:
 
-- Staff can press `AI Reply` in a ticket.
-- If `autoReply` is `true`, the bot can reply automatically when the ticket owner writes.
-- Each category can use a different `aiStyle`.
+```json
+"autoReply": true
+```
 
-## Placeholders
+## Common Problems
 
-You can use these in many config messages:
+### I still see old commands
 
-- `{user}`
-- `{username}`
-- `{userId}`
-- `{category}`
-- `{channel}`
-- `{ticketName}`
-- `{guild}`
-
-## Safe Defaults
-
-- `config.json` is ignored by git.
-- Do not share your Discord token.
-- Do not share your OpenAI API key.
-- Use `/ticket config export` if you need to share your config, because it hides secrets.
-
-## Project Files
+Run:
 
 ```text
-src/
-  ai.js              OpenAI reply generation
-  config.js          Config loading and saving
-  deploy-commands.js Slash command registration
-  index.js           Bot entry point
-  tickets.js         Panels, ticket channels, claim, close, transcript
-  transcript.js      HTML transcript generator
-  utils.js           Helper functions
-config.example.json  Public config template
-config.json          Private local config, ignored by git
+deploy-commands.bat
 ```
+
+Then restart Discord with `Ctrl + R`.
+
+### The bot does not start
+
+Check:
+
+- `token` is correct
+- Node.js is installed
+- You ran `install.bat`
+
+### The panel does not create tickets
+
+Check:
+
+- The bot has `Manage Channels`
+- The bot role is above staff roles
+- Category IDs and role IDs are correct
+
+### Config changed but bot did not update
+
+Use:
+
+```text
+/ticket config
+```
+
+Then click:
+
+```text
+Reload File
+```
+
+## File Guide
+
+```text
+config.json          Your private settings
+config.example.json  Example settings
+start.bat            Starts the bot
+install.bat          Installs packages
+deploy-commands.bat  Fixes and adds Discord commands
+src/                 Bot code
+transcripts/         Saved ticket transcripts
+data/                Ticket database
+```
+
+## Safety
+
+- Never share `config.json` if it has your token.
+- Never post your Discord bot token.
+- Never post your OpenAI API key.
+- Use `Download Config` in `/ticket config` if you need a safe export.
 
 ## License
 
