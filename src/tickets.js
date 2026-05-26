@@ -49,6 +49,29 @@ function resolvePanelCategory(config, panel, categoryId) {
   };
 }
 
+function panelRuntimeConfig(config, panelId) {
+  const panel = config.panels?.[panelId] || {};
+  return {
+    ...config,
+    messages: { ...(config.messages || {}), ...(panel.messages || {}) },
+    businessHours: panel.businessHours || config.businessHours,
+    transcript: panel.transcript
+      ? {
+          ...(config.transcript || {}),
+          ...panel.transcript,
+          html: { ...(config.transcript?.html || {}), ...(panel.transcript?.html || {}) }
+        }
+      : config.transcript,
+    ai: panel.ai
+      ? {
+          ...(config.ai || {}),
+          ...panel.ai,
+          styles: { ...(config.ai?.styles || {}), ...(panel.ai?.styles || {}) }
+        }
+      : config.ai
+  };
+}
+
 async function sendLog(guild, config, eventName, title, description, fields = [], panelId = null) {
   const panelLogs = panelId ? config.panels?.[panelId]?.logs : null;
   const logs = panelLogs?.enabled ? panelLogs : config.logs;
@@ -157,17 +180,18 @@ function controls(config, ticket) {
 
 async function openTicket(interaction, panelId, categoryId, config) {
   const panel = config.panels?.[panelId];
+  const runtimeConfig = panelRuntimeConfig(config, panelId);
   const category = panel ? resolvePanelCategory(config, panel, categoryId) : null;
   if (!panel?.enabled || !category?.enabled) {
     return interaction.reply({ content: 'This ticket category is not available.', ephemeral: true });
   }
 
-  const open = businessHoursOpen(config);
-  if (!open && !config.businessHours?.allowTicketsOutsideHours) {
-    return interaction.reply({ content: config.messages?.outsideHoursBlocked, ephemeral: true });
+  const open = businessHoursOpen(runtimeConfig);
+  if (!open && !runtimeConfig.businessHours?.allowTicketsOutsideHours) {
+    return interaction.reply({ content: runtimeConfig.messages?.outsideHoursBlocked, ephemeral: true });
   }
 
-  const tickets = loadTickets(config);
+  const tickets = loadTickets(runtimeConfig);
   if (!panel.allowMultipleOpenTickets) {
     const existing = Object.values(tickets).find((ticket) => (
       ticket.guildId === interaction.guildId &&
@@ -178,7 +202,7 @@ async function openTicket(interaction, panelId, categoryId, config) {
     if (existing) {
       const channel = interaction.guild.channels.cache.get(existing.channelId);
       return interaction.reply({
-        content: fillTemplate(config.messages?.ticketAlreadyOpen, ticketTemplateData({
+        content: fillTemplate(runtimeConfig.messages?.ticketAlreadyOpen, ticketTemplateData({
           guild: interaction.guild,
           channel,
           ticket: existing,
@@ -227,7 +251,7 @@ async function openTicket(interaction, panelId, categoryId, config) {
     createdAt: new Date().toISOString()
   };
   tickets[channel.id] = ticket;
-  saveTickets(config, tickets);
+  saveTickets(runtimeConfig, tickets);
   const templateData = ticketTemplateData({
     guild: interaction.guild,
     channel,
@@ -247,13 +271,13 @@ async function openTicket(interaction, panelId, categoryId, config) {
   await channel.send({
     content: [`<@${interaction.user.id}>`, ...supportRoles.map((roleId) => `<@&${roleId}>`)].join(' '),
     embeds: [embed],
-    components: controls(config, ticket)
+    components: controls(runtimeConfig, ticket)
   });
-  if (!open && config.businessHours?.sendNoticeInsideTicket) {
-    await channel.send({ content: fillTemplate(config.messages?.outsideHoursNotice, templateData) });
+  if (!open && runtimeConfig.businessHours?.sendNoticeInsideTicket) {
+    await channel.send({ content: fillTemplate(runtimeConfig.messages?.outsideHoursNotice, templateData) });
   }
   await interaction.reply({
-    content: fillTemplate(config.messages?.ticketCreated, templateData),
+    content: fillTemplate(runtimeConfig.messages?.ticketCreated, templateData),
     ephemeral: true
   });
   await sendLog(interaction.guild, config, 'ticketCreated', 'Ticket Created', `${templateData.opener} opened ${templateData.channel}.`, [
@@ -275,13 +299,15 @@ async function findTicket(interaction, config) {
 async function claimTicket(interaction, config, claimed) {
   const { tickets, ticket } = await findTicket(interaction, config);
   if (!ticket) return;
-  const category = config.categories?.[ticket.categoryId];
+  const runtimeConfig = panelRuntimeConfig(config, ticket.panelId);
+  const panel = config.panels?.[ticket.panelId];
+  const category = panel ? resolvePanelCategory(config, panel, ticket.categoryId) : config.categories?.[ticket.categoryId];
   if (!isStaff(interaction.member, config, category)) {
     return interaction.reply({ content: config.messages?.noPermission, ephemeral: true });
   }
   ticket.claimedBy = claimed ? interaction.user.id : null;
   tickets[ticket.channelId] = ticket;
-  saveTickets(config, tickets);
+  saveTickets(runtimeConfig, tickets);
   if (claimed && config.claim?.renameOnClaim) {
     await interaction.channel.setName(sanitizeChannelName(`${config.claim.claimedPrefix || 'claimed'}-${interaction.channel.name}`)).catch(() => null);
   }
@@ -292,9 +318,9 @@ async function claimTicket(interaction, config, claimed) {
     category,
     actor: interaction.user
   });
-  await interaction.update({ components: controls(config, ticket) });
+  await interaction.update({ components: controls(runtimeConfig, ticket) });
   await interaction.followUp({
-    content: fillTemplate(claimed ? config.messages?.ticketClaimed : config.messages?.ticketUnclaimed, templateData)
+    content: fillTemplate(claimed ? runtimeConfig.messages?.ticketClaimed : runtimeConfig.messages?.ticketUnclaimed, templateData)
   });
   await sendLog(interaction.guild, config, claimed ? 'ticketClaimed' : 'ticketUnclaimed', claimed ? 'Ticket Claimed' : 'Ticket Unclaimed', `${templateData.staff} ${claimed ? 'claimed' : 'unclaimed'} ${templateData.channel}.`, [
     { name: 'Category', value: templateData.category || ticket.categoryId, inline: true }
@@ -304,20 +330,22 @@ async function claimTicket(interaction, config, claimed) {
 async function sendTranscript(interaction, config, closeAfter = false) {
   const { tickets, ticket } = await findTicket(interaction, config);
   if (!ticket) return;
-  const category = config.categories?.[ticket.categoryId];
+  const runtimeConfig = panelRuntimeConfig(config, ticket.panelId);
+  const panel = config.panels?.[ticket.panelId];
+  const category = panel ? resolvePanelCategory(config, panel, ticket.categoryId) : config.categories?.[ticket.categoryId];
   if (!isStaff(interaction.member, config, category) && interaction.user.id !== ticket.ownerId) {
-    return interaction.reply({ content: config.messages?.noPermission, ephemeral: true });
+    return interaction.reply({ content: runtimeConfig.messages?.noPermission, ephemeral: true });
   }
   await interaction.deferReply({ ephemeral: true });
-  if (!config.transcript?.enabled) {
+  if (!runtimeConfig.transcript?.enabled) {
     await interaction.editReply({ content: 'Transcript is disabled in config.' });
     if (!closeAfter) return;
     ticket.status = 'closed';
     ticket.closedAt = new Date().toISOString();
     ticket.closedBy = interaction.user.id;
     tickets[ticket.channelId] = ticket;
-    saveTickets(config, tickets);
-    await interaction.channel.send(fillTemplate(config.messages?.ticketClosed, ticketTemplateData({
+    saveTickets(runtimeConfig, tickets);
+    await interaction.channel.send(fillTemplate(runtimeConfig.messages?.ticketClosed, ticketTemplateData({
       guild: interaction.guild,
       channel: interaction.channel,
       ticket,
@@ -327,11 +355,11 @@ async function sendTranscript(interaction, config, closeAfter = false) {
     await interaction.channel.delete('Ticket closed').catch(() => null);
     return;
   }
-  const transcript = await createTranscript(interaction.channel, ticket, config);
+  const transcript = await createTranscript(interaction.channel, ticket, runtimeConfig);
   const owner = await interaction.client.users.fetch(ticket.ownerId).catch(() => null);
-  if (config.transcript?.dmUser && owner) {
+  if (runtimeConfig.transcript?.dmUser && owner) {
     await owner.send({
-      content: fillTemplate(config.messages?.dmTranscript, ticketTemplateData({
+      content: fillTemplate(runtimeConfig.messages?.dmTranscript, ticketTemplateData({
         guild: interaction.guild,
         channel: interaction.channel,
         ticket,
@@ -340,9 +368,9 @@ async function sendTranscript(interaction, config, closeAfter = false) {
         owner
       })),
       files: [transcript.attachment]
-    }).catch(() => interaction.followUp({ content: config.messages?.dmTranscriptFailed, ephemeral: true }));
+    }).catch(() => interaction.followUp({ content: runtimeConfig.messages?.dmTranscriptFailed, ephemeral: true }));
   }
-  const logId = category?.logChannelId || config.transcript?.logChannelId;
+  const logId = category?.logChannelId || runtimeConfig.transcript?.logChannelId;
   const logChannel = logId ? await interaction.guild.channels.fetch(logId).catch(() => null) : null;
   if (logChannel?.isTextBased()) {
     await logChannel.send({ content: `Transcript for ${interaction.channel.name}`, files: [transcript.attachment] });
@@ -354,8 +382,8 @@ async function sendTranscript(interaction, config, closeAfter = false) {
     ticket.closedAt = new Date().toISOString();
     ticket.closedBy = interaction.user.id;
     tickets[ticket.channelId] = ticket;
-    saveTickets(config, tickets);
-    await interaction.channel.send(fillTemplate(config.messages?.ticketClosed, ticketTemplateData({
+    saveTickets(runtimeConfig, tickets);
+    await interaction.channel.send(fillTemplate(runtimeConfig.messages?.ticketClosed, ticketTemplateData({
       guild: interaction.guild,
       channel: interaction.channel,
       ticket,
@@ -377,26 +405,30 @@ async function closeTicket(interaction, config) {
 async function aiReply(interaction, config) {
   const { ticket } = await findTicket(interaction, config);
   if (!ticket) return;
-  const category = config.categories?.[ticket.categoryId];
+  const runtimeConfig = panelRuntimeConfig(config, ticket.panelId);
+  const panel = config.panels?.[ticket.panelId];
+  const category = panel ? resolvePanelCategory(config, panel, ticket.categoryId) : config.categories?.[ticket.categoryId];
   if (!isStaff(interaction.member, config, category)) {
-    return interaction.reply({ content: config.messages?.noPermission, ephemeral: true });
+    return interaction.reply({ content: runtimeConfig.messages?.noPermission, ephemeral: true });
   }
-  await interaction.deferReply({ ephemeral: config.ai?.replyInTicket === false });
-  const reply = await generateAiReply(interaction.channel, ticket, category, config);
-  if (!reply) return interaction.editReply(config.messages?.aiDisabled || 'AI is disabled.');
-  const content = `**${config.messages?.aiReplyPrefix || 'Suggested answer'}**\n${reply}`;
+  await interaction.deferReply({ ephemeral: runtimeConfig.ai?.replyInTicket === false });
+  const reply = await generateAiReply(interaction.channel, ticket, category, runtimeConfig);
+  if (!reply) return interaction.editReply(runtimeConfig.messages?.aiDisabled || 'AI is disabled.');
+  const content = `**${runtimeConfig.messages?.aiReplyPrefix || 'Suggested answer'}**\n${reply}`;
   await sendLog(interaction.guild, config, 'aiReplyUsed', 'AI Reply Used', `<@${interaction.user.id}> generated an AI reply in <#${interaction.channel.id}>.`, [], ticket.panelId);
   return interaction.editReply(content);
 }
 
 async function maybeAutoAi(message, config) {
-  if (!config.ai?.enabled || !config.ai?.autoReply || message.author.bot) return;
   const tickets = loadTickets(config);
   const ticket = tickets[message.channelId];
   if (!ticket || ticket.status !== 'open' || ticket.ownerId !== message.author.id) return;
-  const category = config.categories?.[ticket.categoryId];
-  const reply = await generateAiReply(message.channel, ticket, category, config).catch(() => null);
-  if (reply) await message.channel.send(`**${config.messages?.aiReplyPrefix || 'Suggested answer'}**\n${reply}`);
+  const runtimeConfig = panelRuntimeConfig(config, ticket.panelId);
+  if (!runtimeConfig.ai?.enabled || !runtimeConfig.ai?.autoReply || message.author.bot) return;
+  const panel = config.panels?.[ticket.panelId];
+  const category = panel ? resolvePanelCategory(config, panel, ticket.categoryId) : config.categories?.[ticket.categoryId];
+  const reply = await generateAiReply(message.channel, ticket, category, runtimeConfig).catch(() => null);
+  if (reply) await message.channel.send(`**${runtimeConfig.messages?.aiReplyPrefix || 'Suggested answer'}**\n${reply}`);
 }
 
 module.exports = {

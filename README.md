@@ -66,7 +66,7 @@ From there you can:
 - edit the selected panel
 - delete the selected panel
 - edit that panel's private log settings
-- open general bot settings
+- edit that panel's messages, hours, transcript and AI settings
 - open the value/help page
 
 This is the normal flow:
@@ -75,8 +75,12 @@ This is the normal flow:
 /ticket config
 -> choose panel
 -> Panel Config
+-> Panel Categories
+-> Panel Messages
+-> Panel Hours
+-> Panel Transcript
+-> Panel AI
 -> Panel Logs
--> Bot Settings if needed
 ```
 
 ## Panel Manager
@@ -179,22 +183,7 @@ Turn one off like this:
 aiReplyUsed=no
 ```
 
-If panel logs are off, the bot uses the global log settings.
-
-## Bot Settings
-
-Click `Bot Settings` for general settings:
-
-- server info
-- bot status
-- categories
-- business hours
-- global logs
-- transcripts
-- AI assistant
-- bot messages
-
-Pick a section and click `Edit Selected`.
+If panel logs are off, the panel will use the fallback log settings from `config.json`.
 
 ## Yes / No Settings
 
@@ -212,7 +201,19 @@ no
 
 means disabled.
 
-## Business Hours
+## Panel Messages
+
+Click `Panel Messages` to edit messages for only the selected support profile:
+
+- ticket created
+- already open ticket
+- claimed
+- unclaimed
+- closed
+
+Other panels can use different text.
+
+## Panel Hours
 
 Use simple 24-hour format:
 
@@ -230,6 +231,30 @@ Allow tickets outside hours? yes/no
 Send after-hours message? yes/no
 After-hours message
 ```
+
+These hours apply only to the selected panel.
+
+## Panel Transcript
+
+Click `Panel Transcript` to edit transcript behavior for only the selected panel:
+
+- create transcripts: yes/no
+- DM transcript to user: yes/no
+- transcript log channel ID
+- transcript brand name
+- transcript footer text
+
+## Panel AI
+
+Click `Panel AI` to edit AI behavior for only the selected panel:
+
+- use AI: yes/no
+- auto reply: yes/no
+- model
+- opening prompt
+- panel knowledge
+
+Example: a billing panel can have billing AI instructions, while a report panel can have moderation/report instructions.
 
 ## Message Values
 
@@ -273,19 +298,9 @@ Ticket claimed by {claimer}.
 Ticket closed by {closer}.
 ```
 
-## AI Assistant
+## OpenAI Key
 
-AI is off by default.
-
-In `Bot Settings -> AI Assistant`, you can edit:
-
-- use AI: yes/no
-- auto reply: yes/no
-- model
-- opening prompt
-- server knowledge
-
-Add your OpenAI key in `config.json`:
+Add your OpenAI key in `config.json` once:
 
 ```json
 "apiKey": "YOUR_OPENAI_API_KEY"
