@@ -146,11 +146,77 @@ The bot opens a private menu with sections:
 
 Buttons:
 
-- `Edit Value` changes one setting
+- `Edit Selected` opens an easy form for the selected section
+- `Values / Paths` shows useful setting names and what they mean
 - `Reload File` reloads `config.json`
 - `Download Config` sends you a safe config export with secrets hidden
+- `Advanced Path Edit` changes one exact setting if you already know the path
 
-Examples for `Edit Value`:
+### Easy Forms
+
+Pick a section, then click `Edit Selected`.
+
+For example, if you select `Business Hours`, the form asks:
+
+```text
+Use business hours? yes/no
+Open between what times?
+Allow tickets outside hours? yes/no
+Send after-hours message? yes/no
+After-hours message
+```
+
+So you can write:
+
+```text
+yes
+18:45 - 19:20
+yes
+yes
+Our team is currently offline. Please leave your message here.
+```
+
+No code needed.
+
+### Yes / No Settings
+
+If the form asks `yes/no`:
+
+```text
+yes
+```
+
+means active.
+
+```text
+no
+```
+
+means disabled.
+
+### Time Settings
+
+Use 24-hour time:
+
+```text
+09:00 - 18:00
+18:45 - 19:20
+```
+
+### Role IDs
+
+For staff roles, paste one role ID per line:
+
+```text
+123456789012345678
+987654321098765432
+```
+
+### Advanced Path Edit
+
+Use this only when you already know the exact setting name.
+
+Examples:
 
 ```text
 server.name

@@ -74,6 +74,41 @@ function configPreview(value) {
   return JSON.stringify(value, null, 2).slice(0, 950);
 }
 
+function yesNo(value, fallback = false) {
+  const text = String(value ?? '').trim().toLowerCase();
+  if (['yes', 'y', 'true', 'on', '1', 'evet', 'aktif', 'open'].includes(text)) return true;
+  if (['no', 'n', 'false', 'off', '0', 'hayir', 'hayır', 'kapali', 'kapalı', 'closed'].includes(text)) return false;
+  return fallback;
+}
+
+function splitList(value) {
+  const text = String(value || '').trim();
+  if (!text) return [];
+  try {
+    const parsed = JSON.parse(text);
+    if (Array.isArray(parsed)) return parsed.map(String).filter(Boolean);
+  } catch {
+    // Comma/newline lists are easier for non-technical users.
+  }
+  return text.split(/[\n,]+/).map((item) => item.trim()).filter(Boolean);
+}
+
+function sectionHelpEmbed(config) {
+  return new EmbedBuilder()
+    .setColor(config.colors?.primary || '#3B82F6')
+    .setTitle('📘 Values and Simple Paths')
+    .setDescription('Use these when you press **Edit Selected** or **Advanced Path Edit**. Boolean means write `yes` or `no`.')
+    .addFields(
+      { name: '🏠 Server Info', value: '`server.name` -> server name\n`server.description` -> short server description\n`server.rules` -> rules shown to AI' },
+      { name: '🟢 Bot Status', value: '`bot.presence.enabled` -> yes/no\n`bot.presence.type` -> Watching, Playing, Listening\n`bot.presence.name` -> status text' },
+      { name: '🎟️ Ticket Panel', value: '`panels.support.title` -> panel title\n`panels.support.description` -> panel text\n`panels.support.footer` -> bottom text' },
+      { name: '📂 Categories', value: '`categories.general.supportRoleIds` -> role IDs\n`categories.general.welcomeMessage` -> first ticket message\n`categories.general.discordCategoryId` -> parent category ID' },
+      { name: '🕒 Business Hours', value: '`businessHours.enabled` -> yes/no\n`businessHours.days.monday[0].start` -> 18:45\n`messages.outsideHoursNotice` -> message inside ticket' },
+      { name: '🤖 AI', value: '`ai.enabled` -> yes/no\n`ai.systemPrompt` -> opening prompt\n`ai.serverInfo` -> server knowledge for AI' }
+    )
+    .setFooter({ text: 'Tip: IDs are copied from Discord developer mode.' });
+}
+
 function configDashboard(config, sectionId = 'server') {
   const section = configSections.find((entry) => entry.id === sectionId) || configSections[0];
   const value = getByPath(publicConfig(config), section.id);
@@ -86,8 +121,8 @@ function configDashboard(config, sectionId = 'server') {
     .setTitle('🎛️ Ticket Bot Control Panel')
     .setDescription([
       '**Only you can see this menu.**',
-      'Pick a section below, then use the buttons to edit, reload or export your config.',
-      'No coding needed: the edit form asks for a simple path and a value.'
+      'Pick a section below, then press **Edit Selected**.',
+      'Each form explains the setting in plain English.'
     ].join('\n'))
     .addFields(
       { name: '🏠 Server', value: config.server?.name || 'Not set', inline: true },
@@ -95,7 +130,7 @@ function configDashboard(config, sectionId = 'server') {
       { name: '📂 Categories', value: categories.slice(0, 100), inline: true },
       { name: '🕒 Business Hours', value: hoursState, inline: true },
       { name: '🤖 AI', value: aiState, inline: true },
-      { name: '🧭 Quick Examples', value: '`server.name` -> server name\n`panels.support.title` -> panel title\n`claim.enabled` -> true or false', inline: false },
+      { name: '🧭 Quick Examples', value: '`yes` means enabled. `no` means disabled.\nTimes use 24-hour format: `18:45` and `19:20`.\nRole IDs can be pasted one per line.', inline: false },
       { name: `${section.emoji} Selected: ${section.label}`, value: `\`\`\`json\n${configPreview(value)}\n\`\`\`` }
     )
     .setFooter({ text: 'Tip: use Edit Value for small changes. Use config.json for big changes.' })
@@ -111,15 +146,110 @@ function configDashboard(config, sectionId = 'server') {
       default: entry.id === section.id
     })));
   const buttons = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId('config:set').setLabel('Edit Value').setEmoji('✏️').setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId(`config:edit:${section.id}`).setLabel('Edit Selected').setEmoji('✏️').setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId('config:values').setLabel('Values / Paths').setEmoji('📘').setStyle(ButtonStyle.Success),
     new ButtonBuilder().setCustomId('config:reload').setLabel('Reload File').setEmoji('🔄').setStyle(ButtonStyle.Secondary),
     new ButtonBuilder().setCustomId('config:export').setLabel('Download Config').setEmoji('📦').setStyle(ButtonStyle.Secondary)
   );
+  const advanced = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId('config:set').setLabel('Advanced Path Edit').setEmoji('🛠️').setStyle(ButtonStyle.Secondary)
+  );
   return {
     embeds: [embed],
-    components: [new ActionRowBuilder().addComponents(select), buttons],
+    components: [new ActionRowBuilder().addComponents(select), buttons, advanced],
     ephemeral: true
   };
+}
+
+function input(id, label, placeholder, value = '', style = TextInputStyle.Short, required = false) {
+  return new ActionRowBuilder().addComponents(
+    new TextInputBuilder()
+      .setCustomId(id)
+      .setLabel(label.slice(0, 45))
+      .setPlaceholder(placeholder.slice(0, 100))
+      .setValue(String(value ?? '').slice(0, style === TextInputStyle.Short ? 400 : 3900))
+      .setStyle(style)
+      .setRequired(required)
+  );
+}
+
+function configSectionModal(sectionId, config) {
+  const modal = new ModalBuilder().setCustomId(`config:section-modal:${sectionId}`);
+  if (sectionId === 'server') {
+    return modal.setTitle('Server Info').addComponents(
+      input('server.name', 'Server name', 'Example: Dragonia Community', config.server?.name, TextInputStyle.Short, true),
+      input('server.description', 'What is this server?', 'Short description for staff, users and AI.', config.server?.description, TextInputStyle.Paragraph),
+      input('server.language', 'Main language', 'Example: English', config.server?.language),
+      input('server.rules', 'Simple rules', 'Example: Be respectful. Do not spam.', config.server?.rules, TextInputStyle.Paragraph),
+      input('server.supportInfo', 'Support info', 'Example: We reply between 09:00 and 18:00.', config.server?.supportInfo, TextInputStyle.Paragraph)
+    );
+  }
+  if (sectionId === 'bot') {
+    return modal.setTitle('Bot Status').addComponents(
+      input('bot.presence.enabled', 'Show bot status? yes/no', 'yes = show status, no = hide custom status', config.bot?.presence?.enabled ? 'yes' : 'no', TextInputStyle.Short, true),
+      input('bot.presence.status', 'Online status', 'online, idle, dnd, invisible', config.bot?.presence?.status || 'online'),
+      input('bot.presence.type', 'Activity type', 'Watching, Playing, Listening, Competing', config.bot?.presence?.type || 'Watching'),
+      input('bot.presence.name', 'Status text', 'Example: support tickets', config.bot?.presence?.name || 'support tickets')
+    );
+  }
+  if (sectionId === 'panels') {
+    const panel = config.panels?.support || {};
+    return modal.setTitle('Main Ticket Panel').addComponents(
+      input('panels.support.title', 'Panel title', 'Example: Support Center', panel.title, TextInputStyle.Short, true),
+      input('panels.support.description', 'Panel description', 'Explain what users should do.', panel.description, TextInputStyle.Paragraph, true),
+      input('panels.support.subtitleText', 'Small helper text', 'Example: Pick the correct category.', panel.subtitleText, TextInputStyle.Paragraph),
+      input('panels.support.selectPlaceholder', 'Dropdown placeholder', 'Example: Choose a support category', panel.selectPlaceholder),
+      input('panels.support.footer', 'Panel footer text', 'Example: Do not open duplicate tickets.', panel.footer)
+    );
+  }
+  if (sectionId === 'categories') {
+    const category = config.categories?.general || {};
+    return modal.setTitle('General Category').addComponents(
+      input('categories.general.label', 'Category name', 'Example: General Support', category.label, TextInputStyle.Short, true),
+      input('categories.general.description', 'Category description', 'Shown in the ticket dropdown.', category.description, TextInputStyle.Paragraph),
+      input('categories.general.supportRoleIds', 'Staff role IDs', 'Paste role IDs. One per line is okay.', (category.supportRoleIds || []).join('\n'), TextInputStyle.Paragraph),
+      input('categories.general.discordCategoryId', 'Parent category ID', 'Discord category ID where tickets open.', category.discordCategoryId),
+      input('categories.general.welcomeMessage', 'Welcome message', 'First message inside a new ticket.', category.welcomeMessage, TextInputStyle.Paragraph)
+    );
+  }
+  if (sectionId === 'businessHours') {
+    const monday = config.businessHours?.days?.monday?.[0] || { start: '09:00', end: '18:00' };
+    return modal.setTitle('Business Hours').addComponents(
+      input('businessHours.enabled', 'Use business hours? yes/no', 'yes = active, no = always open', config.businessHours?.enabled ? 'yes' : 'no', TextInputStyle.Short, true),
+      input('businessHours.range', 'Open between what times?', 'Example: 18:45 - 19:20', `${monday.start || '09:00'} - ${monday.end || '18:00'}`, TextInputStyle.Short, true),
+      input('businessHours.allowTicketsOutsideHours', 'Allow tickets outside hours? yes/no', 'yes = users can open tickets after hours', config.businessHours?.allowTicketsOutsideHours ? 'yes' : 'no', TextInputStyle.Short, true),
+      input('businessHours.sendNoticeInsideTicket', 'Send after-hours message? yes/no', 'yes = bot writes a notice inside the ticket', config.businessHours?.sendNoticeInsideTicket ? 'yes' : 'no', TextInputStyle.Short, true),
+      input('messages.outsideHoursNotice', 'After-hours message', 'Message sent when support is closed.', config.messages?.outsideHoursNotice, TextInputStyle.Paragraph)
+    );
+  }
+  if (sectionId === 'transcript') {
+    return modal.setTitle('Transcripts').addComponents(
+      input('transcript.enabled', 'Create transcripts? yes/no', 'yes = save ticket history as HTML', config.transcript?.enabled ? 'yes' : 'no', TextInputStyle.Short, true),
+      input('transcript.dmUser', 'DM transcript to user? yes/no', 'yes = send transcript in DM after close', config.transcript?.dmUser ? 'yes' : 'no', TextInputStyle.Short, true),
+      input('transcript.logChannelId', 'Transcript log channel ID', 'Channel where transcripts are posted.', config.transcript?.logChannelId),
+      input('transcript.html.brandName', 'Transcript brand name', 'Example: Dragonia Support', config.transcript?.html?.brandName),
+      input('transcript.html.footerText', 'Transcript footer text', 'Small text at the bottom of HTML files.', config.transcript?.html?.footerText)
+    );
+  }
+  if (sectionId === 'ai') {
+    return modal.setTitle('AI Assistant').addComponents(
+      input('ai.enabled', 'Use AI assistant? yes/no', 'yes = staff can use AI Reply button', config.ai?.enabled ? 'yes' : 'no', TextInputStyle.Short, true),
+      input('ai.autoReply', 'AI auto reply? yes/no', 'yes = AI may answer user messages automatically', config.ai?.autoReply ? 'yes' : 'no', TextInputStyle.Short, true),
+      input('ai.model', 'AI model', 'Example: gpt-4o-mini', config.ai?.model || 'gpt-4o-mini'),
+      input('ai.systemPrompt', 'Opening prompt', 'Tell AI how to behave.', config.ai?.systemPrompt, TextInputStyle.Paragraph),
+      input('ai.serverInfo', 'Server knowledge', 'Links, prices, plans, common fixes, rules.', config.ai?.serverInfo, TextInputStyle.Paragraph)
+    );
+  }
+  if (sectionId === 'messages') {
+    return modal.setTitle('Bot Messages').addComponents(
+      input('messages.ticketCreated', 'Ticket created message', 'Example: Your ticket has been created: {channel}', config.messages?.ticketCreated),
+      input('messages.ticketAlreadyOpen', 'Already open message', 'Shown when user has an open ticket.', config.messages?.ticketAlreadyOpen),
+      input('messages.outsideHoursBlocked', 'Blocked after-hours message', 'Shown when tickets are closed.', config.messages?.outsideHoursBlocked, TextInputStyle.Paragraph),
+      input('messages.ticketClosed', 'Ticket closed message', 'Example: Ticket closed by {user}.', config.messages?.ticketClosed),
+      input('messages.aiReplyPrefix', 'AI reply title', 'Example: Suggested answer', config.messages?.aiReplyPrefix)
+    );
+  }
+  return configEditModal();
 }
 
 function configEditModal() {
@@ -144,6 +274,117 @@ function configEditModal() {
           .setRequired(true)
       )
     );
+}
+
+function readField(interaction, id) {
+  return interaction.fields.getTextInputValue(id).trim();
+}
+
+function updateMany(entries) {
+  let nextConfig = getConfig();
+  for (const [path, value] of entries) {
+    nextConfig = updateConfig(path, value);
+  }
+  return nextConfig;
+}
+
+function parseTimeRange(value) {
+  const match = String(value || '').match(/(\d{1,2}):(\d{2})\s*(?:-|to|until|,)\s*(\d{1,2}):(\d{2})/i);
+  if (!match) return { start: '09:00', end: '18:00' };
+  const startHour = Math.min(23, Number(match[1])).toString().padStart(2, '0');
+  const startMinute = Math.min(59, Number(match[2])).toString().padStart(2, '0');
+  const endHour = Math.min(23, Number(match[3])).toString().padStart(2, '0');
+  const endMinute = Math.min(59, Number(match[4])).toString().padStart(2, '0');
+  return { start: `${startHour}:${startMinute}`, end: `${endHour}:${endMinute}` };
+}
+
+function applySectionModal(interaction, sectionId) {
+  if (sectionId === 'server') {
+    return updateMany([
+      ['server.name', readField(interaction, 'server.name')],
+      ['server.description', readField(interaction, 'server.description')],
+      ['server.language', readField(interaction, 'server.language')],
+      ['server.rules', readField(interaction, 'server.rules')],
+      ['server.supportInfo', readField(interaction, 'server.supportInfo')]
+    ]);
+  }
+  if (sectionId === 'bot') {
+    const current = getConfig();
+    return updateMany([
+      ['bot.presence.enabled', yesNo(readField(interaction, 'bot.presence.enabled'), current.bot?.presence?.enabled)],
+      ['bot.presence.status', readField(interaction, 'bot.presence.status') || 'online'],
+      ['bot.presence.type', readField(interaction, 'bot.presence.type') || 'Watching'],
+      ['bot.presence.name', readField(interaction, 'bot.presence.name') || 'support tickets']
+    ]);
+  }
+  if (sectionId === 'panels') {
+    return updateMany([
+      ['panels.support.title', readField(interaction, 'panels.support.title')],
+      ['panels.support.description', readField(interaction, 'panels.support.description')],
+      ['panels.support.subtitleText', readField(interaction, 'panels.support.subtitleText')],
+      ['panels.support.selectPlaceholder', readField(interaction, 'panels.support.selectPlaceholder')],
+      ['panels.support.footer', readField(interaction, 'panels.support.footer')]
+    ]);
+  }
+  if (sectionId === 'categories') {
+    return updateMany([
+      ['categories.general.label', readField(interaction, 'categories.general.label')],
+      ['categories.general.description', readField(interaction, 'categories.general.description')],
+      ['categories.general.supportRoleIds', splitList(readField(interaction, 'categories.general.supportRoleIds'))],
+      ['categories.general.discordCategoryId', readField(interaction, 'categories.general.discordCategoryId')],
+      ['categories.general.welcomeMessage', readField(interaction, 'categories.general.welcomeMessage')]
+    ]);
+  }
+  if (sectionId === 'businessHours') {
+    const current = getConfig();
+    const range = parseTimeRange(readField(interaction, 'businessHours.range'));
+    const weekdays = {
+      monday: [range],
+      tuesday: [range],
+      wednesday: [range],
+      thursday: [range],
+      friday: [range],
+      saturday: current.businessHours?.days?.saturday || [],
+      sunday: current.businessHours?.days?.sunday || []
+    };
+    return updateMany([
+      ['businessHours.enabled', yesNo(readField(interaction, 'businessHours.enabled'), current.businessHours?.enabled)],
+      ['businessHours.days', weekdays],
+      ['businessHours.allowTicketsOutsideHours', yesNo(readField(interaction, 'businessHours.allowTicketsOutsideHours'), current.businessHours?.allowTicketsOutsideHours)],
+      ['businessHours.sendNoticeInsideTicket', yesNo(readField(interaction, 'businessHours.sendNoticeInsideTicket'), current.businessHours?.sendNoticeInsideTicket)],
+      ['messages.outsideHoursNotice', readField(interaction, 'messages.outsideHoursNotice')]
+    ]);
+  }
+  if (sectionId === 'transcript') {
+    const current = getConfig();
+    return updateMany([
+      ['transcript.enabled', yesNo(readField(interaction, 'transcript.enabled'), current.transcript?.enabled)],
+      ['transcript.dmUser', yesNo(readField(interaction, 'transcript.dmUser'), current.transcript?.dmUser)],
+      ['transcript.logChannelId', readField(interaction, 'transcript.logChannelId')],
+      ['transcript.html.brandName', readField(interaction, 'transcript.html.brandName')],
+      ['transcript.html.footerText', readField(interaction, 'transcript.html.footerText')]
+    ]);
+  }
+  if (sectionId === 'ai') {
+    const current = getConfig();
+    return updateMany([
+      ['ai.enabled', yesNo(readField(interaction, 'ai.enabled'), current.ai?.enabled)],
+      ['ai.autoReply', yesNo(readField(interaction, 'ai.autoReply'), current.ai?.autoReply)],
+      ['ai.model', readField(interaction, 'ai.model') || 'gpt-4o-mini'],
+      ['ai.systemPrompt', readField(interaction, 'ai.systemPrompt')],
+      ['ai.serverInfo', readField(interaction, 'ai.serverInfo')]
+    ]);
+  }
+  if (sectionId === 'messages') {
+    return updateMany([
+      ['messages.ticketCreated', readField(interaction, 'messages.ticketCreated')],
+      ['messages.ticketAlreadyOpen', readField(interaction, 'messages.ticketAlreadyOpen')],
+      ['messages.outsideHoursBlocked', readField(interaction, 'messages.outsideHoursBlocked')],
+      ['messages.ticketClosed', readField(interaction, 'messages.ticketClosed')],
+      ['messages.aiReplyPrefix', readField(interaction, 'messages.aiReplyPrefix')]
+    ]);
+  }
+  return getConfig();
 }
 
 function applyPresence(config) {
@@ -239,7 +480,13 @@ client.on('interactionCreate', async (interaction) => {
         if (!isStaff(interaction.member, config, null)) {
           return interaction.reply({ content: config.messages?.noPermission || 'No permission.', ephemeral: true });
         }
+        if (interaction.customId.startsWith('config:edit:')) {
+          return interaction.showModal(configSectionModal(interaction.customId.split(':')[2], config));
+        }
         if (interaction.customId === 'config:set') return interaction.showModal(configEditModal());
+        if (interaction.customId === 'config:values') {
+          return interaction.reply({ embeds: [sectionHelpEmbed(config)], ephemeral: true });
+        }
         if (interaction.customId === 'config:reload') {
           const nextConfig = reloadConfig();
           applyPresence(nextConfig);
@@ -259,6 +506,21 @@ client.on('interactionCreate', async (interaction) => {
       if (interaction.customId === 'ticket:transcript') return sendTranscript(interaction, config, false);
       if (interaction.customId === 'ticket:close') return closeTicket(interaction, config);
       if (interaction.customId === 'ticket:ai') return aiReply(interaction, config);
+    }
+    if (interaction.isModalSubmit() && interaction.customId.startsWith('config:section-modal:')) {
+      if (!isStaff(interaction.member, config, null)) {
+        return interaction.reply({ content: config.messages?.noPermission || 'No permission.', ephemeral: true });
+      }
+      const sectionId = interaction.customId.split(':')[2];
+      const nextConfig = applySectionModal(interaction, sectionId);
+      applyPresence(nextConfig);
+      const dashboard = configDashboard(nextConfig, sectionId);
+      return interaction.reply({
+        content: `Saved **${configSections.find((entry) => entry.id === sectionId)?.label || sectionId}** settings.`,
+        embeds: dashboard.embeds,
+        components: dashboard.components,
+        ephemeral: true
+      });
     }
     if (interaction.isModalSubmit() && interaction.customId === 'config:set-modal') {
       if (!isStaff(interaction.member, config, null)) {
