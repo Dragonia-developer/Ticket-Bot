@@ -252,6 +252,54 @@ categories.general.supportRoleIds
 ["123456789012345678"]
 ```
 
+## Message Values
+
+You can use these values inside messages, welcome text, transcript DM text, claim text and close text.
+
+User values:
+
+```text
+{opener}      user who opened the ticket
+{ticketUser}  same as opener
+{username}    opener name
+{userId}      opener Discord ID
+```
+
+Staff values:
+
+```text
+{claimer}     staff member who claimed the ticket
+{closer}      staff member who closed the ticket
+{staff}       staff member doing the action
+{staffName}   staff member name
+```
+
+Ticket values:
+
+```text
+{channel}     ticket channel mention
+{channelName} ticket channel name
+{ticketName}  ticket channel name
+{category}    ticket category name
+{categoryId}  ticket category ID
+{panel}       panel ID
+{guild}       Discord server name
+```
+
+Examples:
+
+```text
+{opener}, your ticket has been created: {channel}
+```
+
+```text
+Ticket claimed by {claimer}.
+```
+
+```text
+Ticket closed by {closer}. Transcript for {ticketName} is ready.
+```
+
 ## Important Config Parts
 
 ### Server Name

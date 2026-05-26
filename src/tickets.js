@@ -31,6 +31,31 @@ function saveTickets(config, tickets) {
   writeJson(ticketsFile(config), tickets);
 }
 
+function ticketTemplateData({ guild, channel, ticket, category, actor, owner }) {
+  const ownerId = owner?.id || ticket?.ownerId;
+  const actorId = actor?.id;
+  const categoryName = category?.label || ticket?.categoryId || '';
+  return {
+    user: ownerId ? `<@${ownerId}>` : '',
+    opener: ownerId ? `<@${ownerId}>` : '',
+    ticketUser: ownerId ? `<@${ownerId}>` : '',
+    username: owner?.username || ticket?.username || '',
+    userId: ownerId || '',
+    staff: actorId ? `<@${actorId}>` : '',
+    actor: actorId ? `<@${actorId}>` : '',
+    claimer: actorId ? `<@${actorId}>` : '',
+    closer: actorId ? `<@${actorId}>` : '',
+    staffName: actor?.username || actor?.tag || '',
+    channel: channel ? `<#${channel.id}>` : '',
+    channelName: channel?.name || '',
+    ticketName: channel?.name || '',
+    category: categoryName,
+    categoryId: ticket?.categoryId || '',
+    panel: ticket?.panelId || '',
+    guild: guild?.name || ''
+  };
+}
+
 function buildPanel(panelId, config) {
   const panel = config.panels?.[panelId];
   if (!panel || !panel.enabled) throw new Error(`Panel not found or disabled: ${panelId}`);
@@ -119,7 +144,13 @@ async function openTicket(interaction, panelId, categoryId, config) {
     if (existing) {
       const channel = interaction.guild.channels.cache.get(existing.channelId);
       return interaction.reply({
-        content: fillTemplate(config.messages?.ticketAlreadyOpen, { channel: channel ? `<#${channel.id}>` : existing.channelId }),
+        content: fillTemplate(config.messages?.ticketAlreadyOpen, ticketTemplateData({
+          guild: interaction.guild,
+          channel,
+          ticket: existing,
+          category: config.categories?.[existing.categoryId],
+          owner: interaction.user
+        })),
         ephemeral: true
       });
     }
@@ -136,20 +167,18 @@ async function openTicket(interaction, panelId, categoryId, config) {
     { id: interaction.user.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.AttachFiles] },
     ...supportRoles.map((roleId) => ({ id: roleId, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.AttachFiles, PermissionFlagsBits.ManageMessages] }))
   ];
-  const name = sanitizeChannelName(fillTemplate(category.channelName || 'ticket-{username}', {
-    username: interaction.user.username,
-    userId: interaction.user.id,
-    category: categoryId
-  }));
+  const baseData = ticketTemplateData({
+    guild: interaction.guild,
+    ticket: { ownerId: interaction.user.id, username: interaction.user.username, categoryId, panelId },
+    category,
+    owner: interaction.user
+  });
+  const name = sanitizeChannelName(fillTemplate(category.channelName || 'ticket-{username}', baseData));
   const channel = await interaction.guild.channels.create({
     name,
     type: ChannelType.GuildText,
     parent: category.discordCategoryId || null,
-    topic: fillTemplate(category.topic || 'Ticket for {user}', {
-      user: interaction.user.tag,
-      userId: interaction.user.id,
-      category: category.label || categoryId
-    }),
+    topic: fillTemplate(category.topic || 'Ticket for {user}', { ...baseData, channelName: name, ticketName: name }),
     permissionOverwrites: overwrites
   });
   const ticket = {
@@ -165,11 +194,18 @@ async function openTicket(interaction, panelId, categoryId, config) {
   };
   tickets[channel.id] = ticket;
   saveTickets(config, tickets);
+  const templateData = ticketTemplateData({
+    guild: interaction.guild,
+    channel,
+    ticket,
+    category,
+    owner: interaction.user
+  });
 
   const embed = new EmbedBuilder()
     .setColor(config.colors?.primary || '#5865F2')
-    .setTitle(fillTemplate(category.welcomeTitle || 'Welcome, {user}', { user: interaction.user.username }))
-    .setDescription(fillTemplate(category.welcomeMessage || 'Please describe your request.', { user: `<@${interaction.user.id}>` }))
+    .setTitle(fillTemplate(category.welcomeTitle || 'Welcome, {user}', templateData))
+    .setDescription(fillTemplate(category.welcomeMessage || 'Please describe your request.', templateData))
     .addFields(
       { name: 'User', value: `<@${interaction.user.id}>`, inline: true },
       { name: 'Category', value: category.label || categoryId, inline: true }
@@ -180,10 +216,10 @@ async function openTicket(interaction, panelId, categoryId, config) {
     components: controls(config, ticket)
   });
   if (!open && config.businessHours?.sendNoticeInsideTicket) {
-    await channel.send({ content: config.messages?.outsideHoursNotice });
+    await channel.send({ content: fillTemplate(config.messages?.outsideHoursNotice, templateData) });
   }
   await interaction.reply({
-    content: fillTemplate(config.messages?.ticketCreated, { channel: `<#${channel.id}>` }),
+    content: fillTemplate(config.messages?.ticketCreated, templateData),
     ephemeral: true
   });
 }
@@ -211,9 +247,16 @@ async function claimTicket(interaction, config, claimed) {
   if (claimed && config.claim?.renameOnClaim) {
     await interaction.channel.setName(sanitizeChannelName(`${config.claim.claimedPrefix || 'claimed'}-${interaction.channel.name}`)).catch(() => null);
   }
+  const templateData = ticketTemplateData({
+    guild: interaction.guild,
+    channel: interaction.channel,
+    ticket,
+    category,
+    actor: interaction.user
+  });
   await interaction.update({ components: controls(config, ticket) });
   await interaction.followUp({
-    content: fillTemplate(claimed ? config.messages?.ticketClaimed : config.messages?.ticketUnclaimed, { user: `<@${interaction.user.id}>` })
+    content: fillTemplate(claimed ? config.messages?.ticketClaimed : config.messages?.ticketUnclaimed, templateData)
   });
 }
 
@@ -233,7 +276,13 @@ async function sendTranscript(interaction, config, closeAfter = false) {
     ticket.closedBy = interaction.user.id;
     tickets[ticket.channelId] = ticket;
     saveTickets(config, tickets);
-    await interaction.channel.send(fillTemplate(config.messages?.ticketClosed, { user: `<@${interaction.user.id}>` }));
+    await interaction.channel.send(fillTemplate(config.messages?.ticketClosed, ticketTemplateData({
+      guild: interaction.guild,
+      channel: interaction.channel,
+      ticket,
+      category,
+      actor: interaction.user
+    })));
     await interaction.channel.delete('Ticket closed').catch(() => null);
     return;
   }
@@ -241,7 +290,14 @@ async function sendTranscript(interaction, config, closeAfter = false) {
   const owner = await interaction.client.users.fetch(ticket.ownerId).catch(() => null);
   if (config.transcript?.dmUser && owner) {
     await owner.send({
-      content: fillTemplate(config.messages?.dmTranscript, { ticketName: interaction.channel.name }),
+      content: fillTemplate(config.messages?.dmTranscript, ticketTemplateData({
+        guild: interaction.guild,
+        channel: interaction.channel,
+        ticket,
+        category,
+        actor: interaction.user,
+        owner
+      })),
       files: [transcript.attachment]
     }).catch(() => interaction.followUp({ content: config.messages?.dmTranscriptFailed, ephemeral: true }));
   }
@@ -257,7 +313,14 @@ async function sendTranscript(interaction, config, closeAfter = false) {
     ticket.closedBy = interaction.user.id;
     tickets[ticket.channelId] = ticket;
     saveTickets(config, tickets);
-    await interaction.channel.send(fillTemplate(config.messages?.ticketClosed, { user: `<@${interaction.user.id}>` }));
+    await interaction.channel.send(fillTemplate(config.messages?.ticketClosed, ticketTemplateData({
+      guild: interaction.guild,
+      channel: interaction.channel,
+      ticket,
+      category,
+      actor: interaction.user,
+      owner
+    })));
     await interaction.channel.delete('Ticket closed').catch(() => null);
   }
 }

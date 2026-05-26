@@ -104,7 +104,11 @@ function sectionHelpEmbed(config) {
       { name: '🎟️ Ticket Panel', value: '`panels.support.title` -> panel title\n`panels.support.description` -> panel text\n`panels.support.footer` -> bottom text' },
       { name: '📂 Categories', value: '`categories.general.supportRoleIds` -> role IDs\n`categories.general.welcomeMessage` -> first ticket message\n`categories.general.discordCategoryId` -> parent category ID' },
       { name: '🕒 Business Hours', value: '`businessHours.enabled` -> yes/no\n`businessHours.days.monday[0].start` -> 18:45\n`messages.outsideHoursNotice` -> message inside ticket' },
-      { name: '🤖 AI', value: '`ai.enabled` -> yes/no\n`ai.systemPrompt` -> opening prompt\n`ai.serverInfo` -> server knowledge for AI' }
+      { name: '🤖 AI', value: '`ai.enabled` -> yes/no\n`ai.systemPrompt` -> opening prompt\n`ai.serverInfo` -> server knowledge for AI' },
+      { name: '👤 User Placeholders', value: '`{opener}` -> user who opened the ticket\n`{ticketUser}` -> same as opener\n`{username}` -> opener name\n`{userId}` -> opener ID' },
+      { name: '🛡️ Staff Placeholders', value: '`{claimer}` -> staff who claimed\n`{closer}` -> staff who closed\n`{staff}` -> staff member doing the action\n`{staffName}` -> staff name' },
+      { name: '🎫 Ticket Placeholders', value: '`{channel}` -> ticket channel mention\n`{channelName}` -> ticket channel name\n`{ticketName}` -> ticket channel name\n`{category}` -> category name' },
+      { name: '🌐 Server Placeholders', value: '`{guild}` -> Discord server name\n`{panel}` -> panel ID\n`{categoryId}` -> category ID' }
     )
     .setFooter({ text: 'Tip: IDs are copied from Discord developer mode.' });
 }
