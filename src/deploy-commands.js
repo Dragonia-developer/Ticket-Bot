@@ -23,11 +23,14 @@ async function main() {
   if (!config.clientId || config.clientId === 'YOUR_APPLICATION_CLIENT_ID') throw new Error('Set clientId in config.json first.');
   const rest = new REST({ version: '10' }).setToken(config.token);
   if (config.guildId) {
+    await rest.put(Routes.applicationGuildCommands(config.clientId, config.guildId), { body: [] });
     await rest.put(Routes.applicationGuildCommands(config.clientId, config.guildId), { body: commands });
-    console.log(`Deployed ${commands.length} guild command(s) to ${config.guildId}.`);
+    await rest.put(Routes.applicationCommands(config.clientId), { body: [] });
+    console.log(`Cleared old commands and deployed ${commands.length} guild command(s) to ${config.guildId}.`);
   } else {
+    await rest.put(Routes.applicationCommands(config.clientId), { body: [] });
     await rest.put(Routes.applicationCommands(config.clientId), { body: commands });
-    console.log(`Deployed ${commands.length} global command(s). Global commands may take up to one hour to appear.`);
+    console.log(`Cleared old commands and deployed ${commands.length} global command(s). Global commands may take up to one hour to appear.`);
   }
 }
 
