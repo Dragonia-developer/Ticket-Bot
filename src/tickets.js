@@ -31,8 +31,9 @@ function saveTickets(config, tickets) {
   writeJson(ticketsFile(config), tickets);
 }
 
-async function sendLog(guild, config, eventName, title, description, fields = []) {
-  const logs = config.logs;
+async function sendLog(guild, config, eventName, title, description, fields = [], panelId = null) {
+  const panelLogs = panelId ? config.panels?.[panelId]?.logs : null;
+  const logs = panelLogs?.enabled ? panelLogs : config.logs;
   if (!logs?.enabled || !logs.channelId || logs.events?.[eventName] === false) return;
   const channel = await guild.channels.fetch(logs.channelId).catch(() => null);
   if (!channel?.isTextBased()) return;
@@ -111,7 +112,7 @@ function buildPanel(panelId, config) {
 
 async function sendPanel(interaction, panelId, channel, config) {
   await channel.send(buildPanel(panelId, config));
-  await sendLog(interaction.guild, config, 'panelSent', 'Panel Sent', `Panel \`${panelId}\` was sent to <#${channel.id}> by <@${interaction.user.id}>.`);
+  await sendLog(interaction.guild, config, 'panelSent', 'Panel Sent', `Panel \`${panelId}\` was sent to <#${channel.id}> by <@${interaction.user.id}>.`, [], panelId);
   await interaction.reply({ content: config.messages?.panelSent || 'Ticket panel sent.', ephemeral: true });
 }
 
@@ -240,7 +241,7 @@ async function openTicket(interaction, panelId, categoryId, config) {
   await sendLog(interaction.guild, config, 'ticketCreated', 'Ticket Created', `${templateData.opener} opened ${templateData.channel}.`, [
     { name: 'Category', value: templateData.category || categoryId, inline: true },
     { name: 'Panel', value: panelId, inline: true }
-  ]);
+  ], panelId);
 }
 
 async function findTicket(interaction, config) {
@@ -279,7 +280,7 @@ async function claimTicket(interaction, config, claimed) {
   });
   await sendLog(interaction.guild, config, claimed ? 'ticketClaimed' : 'ticketUnclaimed', claimed ? 'Ticket Claimed' : 'Ticket Unclaimed', `${templateData.staff} ${claimed ? 'claimed' : 'unclaimed'} ${templateData.channel}.`, [
     { name: 'Category', value: templateData.category || ticket.categoryId, inline: true }
-  ]);
+  ], ticket.panelId);
 }
 
 async function sendTranscript(interaction, config, closeAfter = false) {
@@ -328,7 +329,7 @@ async function sendTranscript(interaction, config, closeAfter = false) {
   if (logChannel?.isTextBased()) {
     await logChannel.send({ content: `Transcript for ${interaction.channel.name}`, files: [transcript.attachment] });
   }
-  await sendLog(interaction.guild, config, 'transcriptCreated', 'Transcript Created', `Transcript generated for <#${interaction.channel.id}> by <@${interaction.user.id}>.`);
+  await sendLog(interaction.guild, config, 'transcriptCreated', 'Transcript Created', `Transcript generated for <#${interaction.channel.id}> by <@${interaction.user.id}>.`, [], ticket.panelId);
   await interaction.editReply({ content: `Transcript generated: ${transcript.filePath}` });
   if (closeAfter) {
     ticket.status = 'closed';
@@ -346,7 +347,7 @@ async function sendTranscript(interaction, config, closeAfter = false) {
     })));
     await sendLog(interaction.guild, config, 'ticketClosed', 'Ticket Closed', `<@${interaction.user.id}> closed <#${interaction.channel.id}>.`, [
       { name: 'Category', value: category?.label || ticket.categoryId, inline: true }
-    ]);
+    ], ticket.panelId);
     await interaction.channel.delete('Ticket closed').catch(() => null);
   }
 }
@@ -366,7 +367,7 @@ async function aiReply(interaction, config) {
   const reply = await generateAiReply(interaction.channel, ticket, category, config);
   if (!reply) return interaction.editReply(config.messages?.aiDisabled || 'AI is disabled.');
   const content = `**${config.messages?.aiReplyPrefix || 'Suggested answer'}**\n${reply}`;
-  await sendLog(interaction.guild, config, 'aiReplyUsed', 'AI Reply Used', `<@${interaction.user.id}> generated an AI reply in <#${interaction.channel.id}>.`);
+  await sendLog(interaction.guild, config, 'aiReplyUsed', 'AI Reply Used', `<@${interaction.user.id}> generated an AI reply in <#${interaction.channel.id}>.`, [], ticket.panelId);
   return interaction.editReply(content);
 }
 

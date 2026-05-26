@@ -184,15 +184,20 @@ function panelDashboard(config, selectedId = Object.keys(config.panels || {})[0]
   }));
   const embed = new EmbedBuilder()
     .setColor(config.colors?.primary || '#3B82F6')
-    .setTitle('🎟️ Panel Manager')
-    .setDescription('Create, edit or delete ticket panels. A panel is the public message users use to open tickets.')
+    .setTitle('🎟️ Ticket Panel Manager')
+    .setDescription([
+      '**This is the first config screen.**',
+      'Choose a panel below, create a new one, delete one, or open that panel settings.',
+      'Each panel can have its own text, categories and log channel.'
+    ].join('\n'))
     .addFields(
       { name: 'Selected Panel', value: `\`${selectedId}\``, inline: true },
       { name: 'Status', value: selected.enabled === false ? 'Disabled' : 'Enabled', inline: true },
       { name: 'Title', value: selected.title || 'Not set', inline: false },
-      { name: 'Categories', value: (selected.categories || []).join(', ') || 'None', inline: false }
+      { name: 'Categories', value: (selected.categories || []).join(', ') || 'None', inline: false },
+      { name: 'Panel Log', value: selected.logs?.enabled ? `Enabled ${selected.logs.channelId ? `(<#${selected.logs.channelId}>)` : '(no channel)'}` : 'Uses global log settings or disabled', inline: false }
     )
-    .setFooter({ text: 'Create Panel adds a new panel. Edit Selected changes the selected panel. Delete Selected removes it.' });
+    .setFooter({ text: 'Tip: after creating a panel, use /ticket panel panel:<id> channel:#channel to send it.' });
   const rows = [];
   if (options.length) {
     rows.push(new ActionRowBuilder().addComponents(
@@ -204,9 +209,13 @@ function panelDashboard(config, selectedId = Object.keys(config.panels || {})[0]
   }
   rows.push(new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId('panel-manager:create').setLabel('Create Panel').setEmoji('➕').setStyle(ButtonStyle.Success),
-    new ButtonBuilder().setCustomId(`panel-manager:edit:${selectedId}`).setLabel('Edit Selected').setEmoji('✏️').setStyle(ButtonStyle.Primary),
-    new ButtonBuilder().setCustomId(`panel-manager:delete:${selectedId}`).setLabel('Delete Selected').setEmoji('🗑️').setStyle(ButtonStyle.Danger),
-    new ButtonBuilder().setCustomId('panel-manager:back').setLabel('Back').setEmoji('↩️').setStyle(ButtonStyle.Secondary)
+    new ButtonBuilder().setCustomId(`panel-manager:edit:${selectedId}`).setLabel('Panel Config').setEmoji('✏️').setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId(`panel-manager:logs:${selectedId}`).setLabel('Panel Logs').setEmoji('📌').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId(`panel-manager:delete:${selectedId}`).setLabel('Delete').setEmoji('🗑️').setStyle(ButtonStyle.Danger)
+  ));
+  rows.push(new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId('panel-manager:bot-settings').setLabel('Bot Settings').setEmoji('⚙️').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId('panel-manager:values').setLabel('Values / Help').setEmoji('📘').setStyle(ButtonStyle.Secondary)
   ));
   return { embeds: [embed], components: rows, ephemeral: true };
 }
@@ -332,6 +341,27 @@ function panelEditModal(panelId, config) {
     );
 }
 
+function panelLogsModal(panelId, config) {
+  const logs = config.panels?.[panelId]?.logs || {};
+  const events = logs.events || {};
+  return new ModalBuilder()
+    .setCustomId(`panel-manager:logs-modal:${panelId}`)
+    .setTitle(`Panel Logs: ${panelId}`.slice(0, 45))
+    .addComponents(
+      input('enabled', 'Use separate panel logs? yes/no', 'yes = this panel has its own log settings', logs.enabled ? 'yes' : 'no', TextInputStyle.Short, true),
+      input('channelId', 'Panel log channel ID', 'Leave empty to use global logs or disable panel logs.', logs.channelId || ''),
+      input('events', 'Events to log for this panel', 'ticketCreated=yes, ticketClosed=yes, aiReplyUsed=no', [
+        `panelSent=${events.panelSent === false ? 'no' : 'yes'}`,
+        `ticketCreated=${events.ticketCreated === false ? 'no' : 'yes'}`,
+        `ticketClaimed=${events.ticketClaimed === false ? 'no' : 'yes'}`,
+        `ticketUnclaimed=${events.ticketUnclaimed === false ? 'no' : 'yes'}`,
+        `ticketClosed=${events.ticketClosed === false ? 'no' : 'yes'}`,
+        `transcriptCreated=${events.transcriptCreated === false ? 'no' : 'yes'}`,
+        `aiReplyUsed=${events.aiReplyUsed === false ? 'no' : 'yes'}`
+      ].join('\n'), TextInputStyle.Paragraph, true)
+    );
+}
+
 function panelCreateModal() {
   return new ModalBuilder()
     .setCustomId('panel-manager:create-modal')
@@ -367,6 +397,7 @@ function panelFromModal(interaction, existing = {}) {
     footer: readField(interaction, 'footer'),
     image: existing.image || '',
     thumbnail: existing.thumbnail || '',
+    logs: existing.logs || { enabled: false, channelId: '', events: {} },
     selectPlaceholder: existing.selectPlaceholder || 'Choose a support category',
     allowMultipleOpenTickets: Boolean(existing.allowMultipleOpenTickets),
     categories: splitList(readField(interaction, 'categories'))
@@ -558,7 +589,7 @@ async function handleTicketCommand(interaction) {
     return sendPanel(interaction, interaction.options.getString('panel', true), interaction.options.getChannel('channel', true), config);
   }
   if (subcommand === 'config') {
-    return interaction.reply(configDashboard(config));
+    return interaction.reply(panelDashboard(config));
   }
   if (group === 'config' && subcommand === 'reload') {
     config = reloadConfig();
@@ -637,9 +668,7 @@ client.on('interactionCreate', async (interaction) => {
         if (interaction.customId.startsWith('config:edit:')) {
           return interaction.showModal(configSectionModal(interaction.customId.split(':')[2], config));
         }
-        if (interaction.customId === 'config:panels') {
-          return interaction.update(panelDashboard(config));
-        }
+        if (interaction.customId === 'config:panels') return interaction.update(panelDashboard(config));
         if (interaction.customId === 'config:logs') {
           return interaction.update(configDashboard(config, 'logs'));
         }
@@ -666,9 +695,15 @@ client.on('interactionCreate', async (interaction) => {
           return interaction.reply({ content: config.messages?.noPermission || 'No permission.', ephemeral: true });
         }
         if (interaction.customId === 'panel-manager:create') return interaction.showModal(panelCreateModal());
-        if (interaction.customId === 'panel-manager:back') return interaction.update(configDashboard(config, 'panels'));
+        if (interaction.customId === 'panel-manager:bot-settings') return interaction.update(configDashboard(config, 'server'));
+        if (interaction.customId === 'panel-manager:values') {
+          return interaction.reply({ embeds: [sectionHelpEmbed(config)], ephemeral: true });
+        }
         if (interaction.customId.startsWith('panel-manager:edit:')) {
           return interaction.showModal(panelEditModal(interaction.customId.split(':')[2], config));
+        }
+        if (interaction.customId.startsWith('panel-manager:logs:')) {
+          return interaction.showModal(panelLogsModal(interaction.customId.split(':')[2], config));
         }
         if (interaction.customId.startsWith('panel-manager:delete:')) {
           const panelId = interaction.customId.split(':')[2];
@@ -735,6 +770,32 @@ client.on('interactionCreate', async (interaction) => {
       const nextConfig = updateConfig('panels', nextPanels);
       return interaction.reply({
         content: `Saved panel \`${panelId}\`.`,
+        embeds: panelDashboard(nextConfig, panelId).embeds,
+        components: panelDashboard(nextConfig, panelId).components,
+        ephemeral: true
+      });
+    }
+    if (interaction.isModalSubmit() && interaction.customId.startsWith('panel-manager:logs-modal:')) {
+      if (!isStaff(interaction.member, config, null)) {
+        return interaction.reply({ content: config.messages?.noPermission || 'No permission.', ephemeral: true });
+      }
+      const panelId = interaction.customId.split(':')[2];
+      const current = getConfig();
+      const panel = current.panels?.[panelId] || {};
+      const nextPanels = {
+        ...(current.panels || {}),
+        [panelId]: {
+          ...panel,
+          logs: {
+            enabled: yesNo(readField(interaction, 'enabled'), panel.logs?.enabled),
+            channelId: readField(interaction, 'channelId'),
+            events: parseEventToggles(readField(interaction, 'events'), panel.logs?.events)
+          }
+        }
+      };
+      const nextConfig = updateConfig('panels', nextPanels);
+      return interaction.reply({
+        content: `Saved log settings for panel \`${panelId}\`.`,
         embeds: panelDashboard(nextConfig, panelId).embeds,
         components: panelDashboard(nextConfig, panelId).components,
         ephemeral: true

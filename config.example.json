@@ -143,6 +143,19 @@
       "footer": "One clear ticket is better than multiple duplicate tickets.",
       "image": "",
       "thumbnail": "",
+      "logs": {
+        "enabled": false,
+        "channelId": "",
+        "events": {
+          "panelSent": true,
+          "ticketCreated": true,
+          "ticketClaimed": true,
+          "ticketUnclaimed": true,
+          "ticketClosed": true,
+          "transcriptCreated": true,
+          "aiReplyUsed": true
+        }
+      },
       "selectPlaceholder": "Choose a support category",
       "allowMultipleOpenTickets": false,
       "categories": ["general", "billing", "technical"]
