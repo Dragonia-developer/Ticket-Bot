@@ -31,6 +31,20 @@ function saveTickets(config, tickets) {
   writeJson(ticketsFile(config), tickets);
 }
 
+async function sendLog(guild, config, eventName, title, description, fields = []) {
+  const logs = config.logs;
+  if (!logs?.enabled || !logs.channelId || logs.events?.[eventName] === false) return;
+  const channel = await guild.channels.fetch(logs.channelId).catch(() => null);
+  if (!channel?.isTextBased()) return;
+  const embed = new EmbedBuilder()
+    .setColor(config.colors?.neutral || '#2B2D31')
+    .setTitle(title)
+    .setDescription(description)
+    .setTimestamp();
+  if (fields.length) embed.addFields(fields);
+  await channel.send({ embeds: [embed] }).catch(() => null);
+}
+
 function ticketTemplateData({ guild, channel, ticket, category, actor, owner }) {
   const ownerId = owner?.id || ticket?.ownerId;
   const actorId = actor?.id;
@@ -97,6 +111,7 @@ function buildPanel(panelId, config) {
 
 async function sendPanel(interaction, panelId, channel, config) {
   await channel.send(buildPanel(panelId, config));
+  await sendLog(interaction.guild, config, 'panelSent', 'Panel Sent', `Panel \`${panelId}\` was sent to <#${channel.id}> by <@${interaction.user.id}>.`);
   await interaction.reply({ content: config.messages?.panelSent || 'Ticket panel sent.', ephemeral: true });
 }
 
@@ -222,6 +237,10 @@ async function openTicket(interaction, panelId, categoryId, config) {
     content: fillTemplate(config.messages?.ticketCreated, templateData),
     ephemeral: true
   });
+  await sendLog(interaction.guild, config, 'ticketCreated', 'Ticket Created', `${templateData.opener} opened ${templateData.channel}.`, [
+    { name: 'Category', value: templateData.category || categoryId, inline: true },
+    { name: 'Panel', value: panelId, inline: true }
+  ]);
 }
 
 async function findTicket(interaction, config) {
@@ -258,6 +277,9 @@ async function claimTicket(interaction, config, claimed) {
   await interaction.followUp({
     content: fillTemplate(claimed ? config.messages?.ticketClaimed : config.messages?.ticketUnclaimed, templateData)
   });
+  await sendLog(interaction.guild, config, claimed ? 'ticketClaimed' : 'ticketUnclaimed', claimed ? 'Ticket Claimed' : 'Ticket Unclaimed', `${templateData.staff} ${claimed ? 'claimed' : 'unclaimed'} ${templateData.channel}.`, [
+    { name: 'Category', value: templateData.category || ticket.categoryId, inline: true }
+  ]);
 }
 
 async function sendTranscript(interaction, config, closeAfter = false) {
@@ -306,6 +328,7 @@ async function sendTranscript(interaction, config, closeAfter = false) {
   if (logChannel?.isTextBased()) {
     await logChannel.send({ content: `Transcript for ${interaction.channel.name}`, files: [transcript.attachment] });
   }
+  await sendLog(interaction.guild, config, 'transcriptCreated', 'Transcript Created', `Transcript generated for <#${interaction.channel.id}> by <@${interaction.user.id}>.`);
   await interaction.editReply({ content: `Transcript generated: ${transcript.filePath}` });
   if (closeAfter) {
     ticket.status = 'closed';
@@ -321,6 +344,9 @@ async function sendTranscript(interaction, config, closeAfter = false) {
       actor: interaction.user,
       owner
     })));
+    await sendLog(interaction.guild, config, 'ticketClosed', 'Ticket Closed', `<@${interaction.user.id}> closed <#${interaction.channel.id}>.`, [
+      { name: 'Category', value: category?.label || ticket.categoryId, inline: true }
+    ]);
     await interaction.channel.delete('Ticket closed').catch(() => null);
   }
 }
@@ -340,6 +366,7 @@ async function aiReply(interaction, config) {
   const reply = await generateAiReply(interaction.channel, ticket, category, config);
   if (!reply) return interaction.editReply(config.messages?.aiDisabled || 'AI is disabled.');
   const content = `**${config.messages?.aiReplyPrefix || 'Suggested answer'}**\n${reply}`;
+  await sendLog(interaction.guild, config, 'aiReplyUsed', 'AI Reply Used', `<@${interaction.user.id}> generated an AI reply in <#${interaction.channel.id}>.`);
   return interaction.editReply(content);
 }
 

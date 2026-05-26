@@ -146,6 +146,8 @@ The bot opens a private menu with sections:
 
 Buttons:
 
+- `Manage Panels` creates, edits and deletes ticket panels
+- `Log Settings` opens the log settings section
 - `Edit Selected` opens an easy form for the selected section
 - `Values / Paths` shows useful setting names and what they mean
 - `Reload File` reloads `config.json`
@@ -177,6 +179,70 @@ Our team is currently offline. Please leave your message here.
 ```
 
 No code needed.
+
+### Manage Panels
+
+Click:
+
+```text
+Manage Panels
+```
+
+From there you can:
+
+- Create a new panel
+- Edit the selected panel
+- Delete the selected panel
+- Choose which categories appear on that panel
+
+Example panel IDs:
+
+```text
+support
+reports
+staff-help
+donation-help
+```
+
+After creating a panel, send it with:
+
+```text
+/ticket panel panel:reports channel:#reports
+```
+
+### Logs
+
+Click:
+
+```text
+Log Settings
+```
+
+You can set:
+
+```text
+Use logs? yes/no
+Log channel ID
+What should be logged?
+```
+
+Events you can turn on or off:
+
+```text
+panelSent=yes
+ticketCreated=yes
+ticketClaimed=yes
+ticketUnclaimed=yes
+ticketClosed=yes
+transcriptCreated=yes
+aiReplyUsed=yes
+```
+
+To disable one:
+
+```text
+aiReplyUsed=no
+```
 
 ### Yes / No Settings
 

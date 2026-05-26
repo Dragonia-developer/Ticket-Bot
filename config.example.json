@@ -33,6 +33,19 @@
     "ticketsFile": "data/tickets.json",
     "transcriptsDir": "transcripts"
   },
+  "logs": {
+    "enabled": true,
+    "channelId": "",
+    "events": {
+      "panelSent": true,
+      "ticketCreated": true,
+      "ticketClaimed": true,
+      "ticketUnclaimed": true,
+      "ticketClosed": true,
+      "transcriptCreated": true,
+      "aiReplyUsed": true
+    }
+  },
   "messages": {
     "noPermission": "You do not have permission to use this.",
     "configReloaded": "Configuration reloaded.",

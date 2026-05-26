@@ -65,6 +65,7 @@ const configSections = [
   { id: 'panels', label: 'Ticket Panels', emoji: '🎟️', description: 'The message users click to open tickets' },
   { id: 'categories', label: 'Categories', emoji: '📂', description: 'Ticket types, staff roles and welcome text' },
   { id: 'businessHours', label: 'Business Hours', emoji: '🕒', description: 'Working hours and offline behavior' },
+  { id: 'logs', label: 'Logs', emoji: '📌', description: 'Log channel and logged events' },
   { id: 'transcript', label: 'Transcripts', emoji: '📄', description: 'HTML files, logs and DM settings' },
   { id: 'ai', label: 'AI Assistant', emoji: '🤖', description: 'Prompt, server info, model and styles' },
   { id: 'messages', label: 'Bot Messages', emoji: '💬', description: 'Texts the bot sends to users' }
@@ -104,6 +105,7 @@ function sectionHelpEmbed(config) {
       { name: '🎟️ Ticket Panel', value: '`panels.support.title` -> panel title\n`panels.support.description` -> panel text\n`panels.support.footer` -> bottom text' },
       { name: '📂 Categories', value: '`categories.general.supportRoleIds` -> role IDs\n`categories.general.welcomeMessage` -> first ticket message\n`categories.general.discordCategoryId` -> parent category ID' },
       { name: '🕒 Business Hours', value: '`businessHours.enabled` -> yes/no\n`businessHours.days.monday[0].start` -> 18:45\n`messages.outsideHoursNotice` -> message inside ticket' },
+      { name: '📌 Logs', value: '`logs.enabled` -> yes/no\n`logs.channelId` -> log channel ID\n`logs.events.ticketCreated` -> yes/no' },
       { name: '🤖 AI', value: '`ai.enabled` -> yes/no\n`ai.systemPrompt` -> opening prompt\n`ai.serverInfo` -> server knowledge for AI' },
       { name: '👤 User Placeholders', value: '`{opener}` -> user who opened the ticket\n`{ticketUser}` -> same as opener\n`{username}` -> opener name\n`{userId}` -> opener ID' },
       { name: '🛡️ Staff Placeholders', value: '`{claimer}` -> staff who claimed\n`{closer}` -> staff who closed\n`{staff}` -> staff member doing the action\n`{staffName}` -> staff name' },
@@ -120,6 +122,7 @@ function configDashboard(config, sectionId = 'server') {
   const categories = Object.keys(config.categories || {}).join(', ') || 'none';
   const aiState = config.ai?.enabled ? `On (${config.ai.model || 'default model'})` : 'Off';
   const hoursState = config.businessHours?.enabled ? 'On' : 'Off';
+  const logState = config.logs?.enabled ? `On (${config.logs.channelId ? `<#${config.logs.channelId}>` : 'no channel'})` : 'Off';
   const embed = new EmbedBuilder()
     .setColor(config.colors?.primary || '#3B82F6')
     .setTitle('🎛️ Ticket Bot Control Panel')
@@ -134,6 +137,7 @@ function configDashboard(config, sectionId = 'server') {
       { name: '📂 Categories', value: categories.slice(0, 100), inline: true },
       { name: '🕒 Business Hours', value: hoursState, inline: true },
       { name: '🤖 AI', value: aiState, inline: true },
+      { name: '📌 Logs', value: logState, inline: true },
       { name: '🧭 Quick Examples', value: '`yes` means enabled. `no` means disabled.\nTimes use 24-hour format: `18:45` and `19:20`.\nRole IDs can be pasted one per line.', inline: false },
       { name: `${section.emoji} Selected: ${section.label}`, value: `\`\`\`json\n${configPreview(value)}\n\`\`\`` }
     )
@@ -149,6 +153,10 @@ function configDashboard(config, sectionId = 'server') {
       value: entry.id,
       default: entry.id === section.id
     })));
+  const panelTools = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId('config:panels').setLabel('Manage Panels').setEmoji('🎟️').setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId('config:logs').setLabel('Log Settings').setEmoji('📌').setStyle(ButtonStyle.Secondary)
+  );
   const buttons = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId(`config:edit:${section.id}`).setLabel('Edit Selected').setEmoji('✏️').setStyle(ButtonStyle.Primary),
     new ButtonBuilder().setCustomId('config:values').setLabel('Values / Paths').setEmoji('📘').setStyle(ButtonStyle.Success),
@@ -160,9 +168,47 @@ function configDashboard(config, sectionId = 'server') {
   );
   return {
     embeds: [embed],
-    components: [new ActionRowBuilder().addComponents(select), buttons, advanced],
+    components: [panelTools, new ActionRowBuilder().addComponents(select), buttons, advanced],
     ephemeral: true
   };
+}
+
+function panelDashboard(config, selectedId = Object.keys(config.panels || {})[0] || 'support') {
+  const panels = config.panels || {};
+  const selected = panels[selectedId] || {};
+  const options = Object.keys(panels).slice(0, 25).map((id) => ({
+    label: id,
+    description: `${panels[id].enabled === false ? 'Disabled' : 'Enabled'} - ${(panels[id].title || 'No title').slice(0, 60)}`,
+    value: id,
+    default: id === selectedId
+  }));
+  const embed = new EmbedBuilder()
+    .setColor(config.colors?.primary || '#3B82F6')
+    .setTitle('🎟️ Panel Manager')
+    .setDescription('Create, edit or delete ticket panels. A panel is the public message users use to open tickets.')
+    .addFields(
+      { name: 'Selected Panel', value: `\`${selectedId}\``, inline: true },
+      { name: 'Status', value: selected.enabled === false ? 'Disabled' : 'Enabled', inline: true },
+      { name: 'Title', value: selected.title || 'Not set', inline: false },
+      { name: 'Categories', value: (selected.categories || []).join(', ') || 'None', inline: false }
+    )
+    .setFooter({ text: 'Create Panel adds a new panel. Edit Selected changes the selected panel. Delete Selected removes it.' });
+  const rows = [];
+  if (options.length) {
+    rows.push(new ActionRowBuilder().addComponents(
+      new StringSelectMenuBuilder()
+        .setCustomId('panel-manager:select')
+        .setPlaceholder('Choose a panel')
+        .addOptions(options)
+    ));
+  }
+  rows.push(new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId('panel-manager:create').setLabel('Create Panel').setEmoji('➕').setStyle(ButtonStyle.Success),
+    new ButtonBuilder().setCustomId(`panel-manager:edit:${selectedId}`).setLabel('Edit Selected').setEmoji('✏️').setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId(`panel-manager:delete:${selectedId}`).setLabel('Delete Selected').setEmoji('🗑️').setStyle(ButtonStyle.Danger),
+    new ButtonBuilder().setCustomId('panel-manager:back').setLabel('Back').setEmoji('↩️').setStyle(ButtonStyle.Secondary)
+  ));
+  return { embeds: [embed], components: rows, ephemeral: true };
 }
 
 function input(id, label, placeholder, value = '', style = TextInputStyle.Short, required = false) {
@@ -226,6 +272,22 @@ function configSectionModal(sectionId, config) {
       input('messages.outsideHoursNotice', 'After-hours message', 'Message sent when support is closed.', config.messages?.outsideHoursNotice, TextInputStyle.Paragraph)
     );
   }
+  if (sectionId === 'logs') {
+    const events = config.logs?.events || {};
+    return modal.setTitle('Log Settings').addComponents(
+      input('logs.enabled', 'Use logs? yes/no', 'yes = send log messages to a channel', config.logs?.enabled ? 'yes' : 'no', TextInputStyle.Short, true),
+      input('logs.channelId', 'Log channel ID', 'Paste the channel ID where logs should go.', config.logs?.channelId || ''),
+      input('logs.events', 'What should be logged? yes/no list', 'ticketCreated=yes, ticketClosed=yes, aiReplyUsed=no', [
+        `panelSent=${events.panelSent === false ? 'no' : 'yes'}`,
+        `ticketCreated=${events.ticketCreated === false ? 'no' : 'yes'}`,
+        `ticketClaimed=${events.ticketClaimed === false ? 'no' : 'yes'}`,
+        `ticketUnclaimed=${events.ticketUnclaimed === false ? 'no' : 'yes'}`,
+        `ticketClosed=${events.ticketClosed === false ? 'no' : 'yes'}`,
+        `transcriptCreated=${events.transcriptCreated === false ? 'no' : 'yes'}`,
+        `aiReplyUsed=${events.aiReplyUsed === false ? 'no' : 'yes'}`
+      ].join('\n'), TextInputStyle.Paragraph, true)
+    );
+  }
   if (sectionId === 'transcript') {
     return modal.setTitle('Transcripts').addComponents(
       input('transcript.enabled', 'Create transcripts? yes/no', 'yes = save ticket history as HTML', config.transcript?.enabled ? 'yes' : 'no', TextInputStyle.Short, true),
@@ -256,6 +318,61 @@ function configSectionModal(sectionId, config) {
   return configEditModal();
 }
 
+function panelEditModal(panelId, config) {
+  const panel = config.panels?.[panelId] || {};
+  return new ModalBuilder()
+    .setCustomId(`panel-manager:edit-modal:${panelId}`)
+    .setTitle(`Edit Panel: ${panelId}`.slice(0, 45))
+    .addComponents(
+      input('enabled', 'Panel active? yes/no', 'yes = users can use this panel', panel.enabled === false ? 'no' : 'yes', TextInputStyle.Short, true),
+      input('title', 'Panel title', 'Example: Support Center', panel.title || '', TextInputStyle.Short, true),
+      input('description', 'Panel description', 'Main text users will read.', panel.description || '', TextInputStyle.Paragraph, true),
+      input('categories', 'Categories on this panel', 'Example: general, billing, technical', (panel.categories || []).join(', '), TextInputStyle.Paragraph, true),
+      input('footer', 'Footer text', 'Small text at the bottom of the panel.', panel.footer || '', TextInputStyle.Paragraph)
+    );
+}
+
+function panelCreateModal() {
+  return new ModalBuilder()
+    .setCustomId('panel-manager:create-modal')
+    .setTitle('Create New Panel')
+    .addComponents(
+      input('id', 'Panel ID', 'Example: support, reports, staff-help', '', TextInputStyle.Short, true),
+      input('title', 'Panel title', 'Example: Support Center', '', TextInputStyle.Short, true),
+      input('description', 'Panel description', 'Main text users will read.', 'Choose the topic that best matches your request.', TextInputStyle.Paragraph, true),
+      input('categories', 'Categories on this panel', 'Example: general, billing, technical', 'general, billing, technical', TextInputStyle.Paragraph, true),
+      input('footer', 'Footer text', 'Example: Please do not open duplicate tickets.', 'Please do not open duplicate tickets.', TextInputStyle.Paragraph)
+    );
+}
+
+function normalizePanelId(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9-_]/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 32);
+}
+
+function panelFromModal(interaction, existing = {}) {
+  return {
+    ...existing,
+    enabled: yesNo(readField(interaction, 'enabled'), existing.enabled !== false),
+    title: readField(interaction, 'title'),
+    description: readField(interaction, 'description'),
+    subtitle: existing.subtitle || 'Before opening a ticket',
+    subtitleText: existing.subtitleText || 'Please choose the correct category and describe your issue clearly.',
+    fields: existing.fields || [],
+    footer: readField(interaction, 'footer'),
+    image: existing.image || '',
+    thumbnail: existing.thumbnail || '',
+    selectPlaceholder: existing.selectPlaceholder || 'Choose a support category',
+    allowMultipleOpenTickets: Boolean(existing.allowMultipleOpenTickets),
+    categories: splitList(readField(interaction, 'categories'))
+  };
+}
+
 function configEditModal() {
   return new ModalBuilder()
     .setCustomId('config:set-modal')
@@ -281,7 +398,11 @@ function configEditModal() {
 }
 
 function readField(interaction, id) {
-  return interaction.fields.getTextInputValue(id).trim();
+  try {
+    return interaction.fields.getTextInputValue(id).trim();
+  } catch {
+    return '';
+  }
 }
 
 function updateMany(entries) {
@@ -300,6 +421,21 @@ function parseTimeRange(value) {
   const endHour = Math.min(23, Number(match[3])).toString().padStart(2, '0');
   const endMinute = Math.min(59, Number(match[4])).toString().padStart(2, '0');
   return { start: `${startHour}:${startMinute}`, end: `${endHour}:${endMinute}` };
+}
+
+function parseEventToggles(value, current = {}) {
+  const allowed = ['panelSent', 'ticketCreated', 'ticketClaimed', 'ticketUnclaimed', 'ticketClosed', 'transcriptCreated', 'aiReplyUsed'];
+  const next = { ...current };
+  for (const line of String(value || '').split(/\n|,/)) {
+    const match = line.trim().match(/^([a-zA-Z]+)\s*[:=]\s*(.+)$/);
+    if (!match) continue;
+    const key = allowed.find((event) => event.toLowerCase() === match[1].toLowerCase());
+    if (key) next[key] = yesNo(match[2], next[key] !== false);
+  }
+  for (const key of allowed) {
+    if (next[key] === undefined) next[key] = true;
+  }
+  return next;
 }
 
 function applySectionModal(interaction, sectionId) {
@@ -357,6 +493,14 @@ function applySectionModal(interaction, sectionId) {
       ['businessHours.allowTicketsOutsideHours', yesNo(readField(interaction, 'businessHours.allowTicketsOutsideHours'), current.businessHours?.allowTicketsOutsideHours)],
       ['businessHours.sendNoticeInsideTicket', yesNo(readField(interaction, 'businessHours.sendNoticeInsideTicket'), current.businessHours?.sendNoticeInsideTicket)],
       ['messages.outsideHoursNotice', readField(interaction, 'messages.outsideHoursNotice')]
+    ]);
+  }
+  if (sectionId === 'logs') {
+    const current = getConfig();
+    return updateMany([
+      ['logs.enabled', yesNo(readField(interaction, 'logs.enabled'), current.logs?.enabled)],
+      ['logs.channelId', readField(interaction, 'logs.channelId')],
+      ['logs.events', parseEventToggles(readField(interaction, 'logs.events'), current.logs?.events)]
     ]);
   }
   if (sectionId === 'transcript') {
@@ -479,6 +623,12 @@ client.on('interactionCreate', async (interaction) => {
       }
       return interaction.update(configDashboard(config, interaction.values[0]));
     }
+    if (interaction.isStringSelectMenu() && interaction.customId === 'panel-manager:select') {
+      if (!isStaff(interaction.member, config, null)) {
+        return interaction.reply({ content: config.messages?.noPermission || 'No permission.', ephemeral: true });
+      }
+      return interaction.update(panelDashboard(config, interaction.values[0]));
+    }
     if (interaction.isButton()) {
       if (interaction.customId.startsWith('config:')) {
         if (!isStaff(interaction.member, config, null)) {
@@ -486,6 +636,12 @@ client.on('interactionCreate', async (interaction) => {
         }
         if (interaction.customId.startsWith('config:edit:')) {
           return interaction.showModal(configSectionModal(interaction.customId.split(':')[2], config));
+        }
+        if (interaction.customId === 'config:panels') {
+          return interaction.update(panelDashboard(config));
+        }
+        if (interaction.customId === 'config:logs') {
+          return interaction.update(configDashboard(config, 'logs'));
         }
         if (interaction.customId === 'config:set') return interaction.showModal(configEditModal());
         if (interaction.customId === 'config:values') {
@@ -503,6 +659,26 @@ client.on('interactionCreate', async (interaction) => {
             files: [new AttachmentBuilder(buffer, { name: 'config.public.json' })],
             ephemeral: true
           });
+        }
+      }
+      if (interaction.customId.startsWith('panel-manager:')) {
+        if (!isStaff(interaction.member, config, null)) {
+          return interaction.reply({ content: config.messages?.noPermission || 'No permission.', ephemeral: true });
+        }
+        if (interaction.customId === 'panel-manager:create') return interaction.showModal(panelCreateModal());
+        if (interaction.customId === 'panel-manager:back') return interaction.update(configDashboard(config, 'panels'));
+        if (interaction.customId.startsWith('panel-manager:edit:')) {
+          return interaction.showModal(panelEditModal(interaction.customId.split(':')[2], config));
+        }
+        if (interaction.customId.startsWith('panel-manager:delete:')) {
+          const panelId = interaction.customId.split(':')[2];
+          const nextPanels = { ...(config.panels || {}) };
+          if (Object.keys(nextPanels).length <= 1) {
+            return interaction.reply({ content: 'You must keep at least one panel.', ephemeral: true });
+          }
+          delete nextPanels[panelId];
+          const nextConfig = updateConfig('panels', nextPanels);
+          return interaction.update(panelDashboard(nextConfig));
         }
       }
       if (interaction.customId === 'ticket:claim') return claimTicket(interaction, config, true);
@@ -523,6 +699,44 @@ client.on('interactionCreate', async (interaction) => {
         content: `Saved **${configSections.find((entry) => entry.id === sectionId)?.label || sectionId}** settings.`,
         embeds: dashboard.embeds,
         components: dashboard.components,
+        ephemeral: true
+      });
+    }
+    if (interaction.isModalSubmit() && interaction.customId === 'panel-manager:create-modal') {
+      if (!isStaff(interaction.member, config, null)) {
+        return interaction.reply({ content: config.messages?.noPermission || 'No permission.', ephemeral: true });
+      }
+      const panelId = normalizePanelId(readField(interaction, 'id'));
+      if (!panelId) return interaction.reply({ content: 'Panel ID is required. Use letters, numbers, dash or underscore.', ephemeral: true });
+      const current = getConfig();
+      if (current.panels?.[panelId]) return interaction.reply({ content: `Panel \`${panelId}\` already exists.`, ephemeral: true });
+      const nextPanels = {
+        ...(current.panels || {}),
+        [panelId]: panelFromModal(interaction, { enabled: true })
+      };
+      const nextConfig = updateConfig('panels', nextPanels);
+      return interaction.reply({
+        content: `Created panel \`${panelId}\`.`,
+        embeds: panelDashboard(nextConfig, panelId).embeds,
+        components: panelDashboard(nextConfig, panelId).components,
+        ephemeral: true
+      });
+    }
+    if (interaction.isModalSubmit() && interaction.customId.startsWith('panel-manager:edit-modal:')) {
+      if (!isStaff(interaction.member, config, null)) {
+        return interaction.reply({ content: config.messages?.noPermission || 'No permission.', ephemeral: true });
+      }
+      const panelId = interaction.customId.split(':')[2];
+      const current = getConfig();
+      const nextPanels = {
+        ...(current.panels || {}),
+        [panelId]: panelFromModal(interaction, current.panels?.[panelId] || {})
+      };
+      const nextConfig = updateConfig('panels', nextPanels);
+      return interaction.reply({
+        content: `Saved panel \`${panelId}\`.`,
+        embeds: panelDashboard(nextConfig, panelId).embeds,
+        components: panelDashboard(nextConfig, panelId).components,
         ephemeral: true
       });
     }
