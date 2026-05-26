@@ -161,9 +161,6 @@ async function handleTicketCommand(interaction) {
   if (subcommand === 'config') {
     return interaction.reply(configDashboard(config));
   }
-  if (subcommand === 'setup') {
-    return interaction.reply({ embeds: [setupEmbed(config)], ephemeral: true });
-  }
   if (group === 'config' && subcommand === 'reload') {
     config = reloadConfig();
     applyPresence(config);

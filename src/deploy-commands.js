@@ -16,9 +16,6 @@ const commands = [
     .addSubcommand((subcommand) => subcommand
       .setName('config')
       .setDescription('Open the private config control panel'))
-    .addSubcommand((subcommand) => subcommand
-      .setName('setup')
-      .setDescription('Show setup status and missing required values'))
 ].map((command) => command.toJSON());
 
 async function main() {
